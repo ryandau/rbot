@@ -38,7 +38,7 @@ node server.js
 
 2. Access the dashboard:
 - Local: http://127.0.0.1:3000
-- Network: http://<your-ip-address>:3000
+- Network: http://your-ip-address:3000
 
 ## Server Features
 
