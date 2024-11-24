@@ -9,16 +9,6 @@ This is a React dashboard for rbot served by an Express.js backend that provides
 - Node.js (version 14.0.0 or higher)
 - npm (Node Package Manager)
 
-## Project Structure
-```
-rbot/
-├── dashboard/
-│   └── public/
-│       ├── app.js
-│       └── index.html
-└── server.js
-```
-
 ## Installation
 
 1. Install dependencies:
@@ -72,17 +62,3 @@ node server.js
 - Port can be changed by updating the `PORT` constant
 - CORS settings can be modified in the middleware
 - Static file directory can be changed in `express.static()`
-
-### Adding Routes
-Additional Express routes should be added before the catch-all route:
-```javascript
-// Add new routes here
-app.get('/api/example', (req, res) => {
-  // Route handler
-});
-
-// Keep this last
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-```
