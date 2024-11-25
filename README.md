@@ -45,14 +45,26 @@ curl http://127.0.0.1:8000/status
 curl -X POST http://127.0.0.1:8000/update_levels \
 -H "Content-Type: application/json" \
 -d '{
-  "70000.0": {
-    "price": 70000.0,
-    "allocation": 0.25
-  },
-  "65000.0": {
-    "price": 65000.0,
-    "allocation": 0.5
-  }
+    "147500.0": {
+        "price": 147500.0,
+        "allocation": 0.15
+    },
+    "145000.0": {
+        "price": 145000.0,
+        "allocation": 0.20
+    },
+    "142500.0": {
+        "price": 142500.0,
+        "allocation": 0.20
+    },
+    "140000.0": {
+        "price": 140000.0,
+        "allocation": 0.15
+    },
+    "137500.0": {
+        "price": 137500.0,
+        "allocation": 0.15
+    }
 }'
 ```
 
@@ -61,13 +73,15 @@ curl -X POST http://127.0.0.1:8000/update_levels \
 curl -X POST http://127.0.0.1:8000/update_settings \
 -H "Content-Type: application/json" \
 -d '{
-  "POLL_INTERVAL": 30,
-  "INITIAL_INVESTMENT": 1000,
-  "RISK_THRESHOLD": 0.6,
-  "PRICE_BUFFER": 400,
-  "MIN_VOLATILITY_THRESHOLD": 0.002,
-  "MAX_VOLATILITY_THRESHOLD": 0.025,
-  "CONFIDENCE_THRESHOLD": 0.4
+    "POLL_INTERVAL": 20,
+    "INITIAL_INVESTMENT": 500.0,
+    "RISK_THRESHOLD": 0.65,
+    "MAX_HISTORY_DAYS": 14,
+    "PRICE_BUFFER": 200.0,
+    "MIN_VOLATILITY_THRESHOLD": 0.0002,
+    "MAX_VOLATILITY_THRESHOLD": 0.015,
+    "CONFIDENCE_THRESHOLD": 0.42,
+    "SIGNAL_AGREEMENT_REQUIRED": 3
 }'
 ```
 
