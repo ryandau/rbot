@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
-from typing import Optional, List, Dict, Union
+from typing import List, Dict, Optional
 import logging
 from pydantic import BaseModel
 from datetime import datetime
@@ -84,10 +84,6 @@ settings = Settings()
 # Price levels
 price_levels: Dict[float, PriceLevel] = {}
 
-from typing import Optional, List, Dict, Union
-from datetime import datetime
-import logging
-
 class MarketAnalysis:
     def __init__(self, max_history: int = 14, price_history: List[float] = None):
         self.price_history = price_history if price_history is not None else []
@@ -97,7 +93,7 @@ class MarketAnalysis:
         self.total_price_points = len(self.price_history)
         self.min_data_points = 5
         self.logger = logging.getLogger(__name__)
-        self.history_file = 'price_history.json'  # Add this line
+        self.history_file = 'price_history.json'
 
         # Configuration for trend analysis
         self.sma_short_period = 5
@@ -485,6 +481,7 @@ class CoinspotAPI:
 
 class BTCTrader:
     def __init__(self):
+        self.position_locks = {}
         self.logger = logging.getLogger(__name__)
         self.running = False
         self.last_btc_price = None
@@ -528,6 +525,12 @@ class BTCTrader:
         # Initialize CoinspotAPI with credentials
         self.coinspot_api = CoinspotAPI(settings.COINSPOT_API_KEY, settings.COINSPOT_API_SECRET)
 
+    async def get_level_lock(self, price_level: float) -> asyncio.Lock:
+        """Get or create lock for price level"""
+        if price_level not in self.position_locks:
+            self.position_locks[price_level] = asyncio.Lock()
+        return self.position_locks[price_level]
+
     async def monitor_prices(self):
         """Monitor BTC prices and check entry conditions"""
         self.logger.info("Starting price monitoring...")
@@ -547,28 +550,32 @@ class BTCTrader:
                 await asyncio.sleep(settings.POLL_INTERVAL * 2)  # Back off on error
 
     async def check_price_levels(self, current_price: float):
-        """Check if any price levels have been reached and evaluate entry conditions."""
+        """Check price levels with proper locking"""
         try:
             current_time = datetime.now()
-
+            
             for level in price_levels.values():
                 level.last_checked = current_time
-                
-                # Calculate buffer price
                 buffer_price = level.price - self.price_buffer
-                
+
                 if not level.triggered and current_price <= buffer_price:
-                    # Check entry conditions
-                    self.logger.info(
-                        f"Price level ${level.price:.2f} reached at ${current_price:.2f}. "
-                        f"Evaluating entry conditions..."
-                    )
+                    # Get lock for this level
+                    lock = await self.get_level_lock(level.price)
                     
-                    conditions = await self.check_entry_conditions(level, current_price)
-                    if conditions:
-                        allocation_amount = settings.INITIAL_INVESTMENT * level.allocation
-                        await self.execute_buy_signal(level, current_price, allocation_amount)
-                        
+                    async with lock:  # Ensure atomic operation
+                        # Recheck conditions after acquiring lock
+                        if not level.triggered and current_price <= buffer_price:
+                            # Validate before executing
+                            if await self.validate_new_position(level, current_price):
+                                allocation_amount = settings.INITIAL_INVESTMENT * level.allocation
+                                # Set triggered BEFORE executing to prevent race
+                                level.triggered = True
+                                try:
+                                    await self.execute_buy_signal(level, current_price, allocation_amount)
+                                except Exception as e:
+                                    level.triggered = False  # Reset on failure
+                                    self.logger.error(f"Failed to execute buy signal: {e}")
+                            
         except Exception as e:
             self.logger.error(f"Error in check_price_levels: {e}")
 
@@ -766,65 +773,112 @@ class BTCTrader:
             return 0
 
     async def execute_buy_signal(self, level: PriceLevel, current_price: float, allocation_amount: float):
-        """Execute the buy signal and update bot state."""
+        """Execute buy signal with proper transaction handling"""
         try:
-            level.triggered = True
-            self.logger.info(f"Executing buy signal at price {current_price} for amount ${allocation_amount:.2f} AUD.")
-
-            # Place market buy order via Coinspot API
+            # Place order
             order_result = await self.place_buy_order(allocation_amount)
+            if not order_result:
+                self.logger.error("Order failed - skipping position creation")
+                raise Exception("Order placement failed")
 
-            if order_result:
-                btc_amount = float(order_result.get('amount', 0))
-                
-                # Update positions and alerts
-                new_position = {
-                    "price_level": level.price,
-                    "entry_price": current_price,
-                    "btc_amount": btc_amount,
-                    "timestamp": str(datetime.now()),
-                    "order_id": order_result.get('id'),
-                }
-                
-                new_alert = {
-                    "type": "buy_executed",
-                    "price_level": level.price,
-                    "entry_price": current_price,
-                    "allocation": allocation_amount,
-                    "btc_amount": btc_amount,
-                    "timestamp": str(datetime.now()),
-                    "order_id": order_result.get('id'),
-                }
-                
-                self.active_positions.append(new_position)
-                self.price_alerts.append(new_alert)
-                
-                # Save state after update
-                self.save_state()
-                
-                # Send notification
-                await self.notifications.send_notification(
-                    title="BTC Buy Order Placed",
-                    message=f"Bought {btc_amount:.8f} BTC for ${allocation_amount:.2f} AUD (Order ID: {order_result.get('id')})",
-                    priority=5
-                )
-            else:
-                self.logger.error("Failed to place buy order.")
-                # Reset the trigger to attempt again later
-                level.triggered = False
-                
+            # Create position record
+            new_position = {
+                "price_level": level.price,
+                "entry_price": current_price,
+                "btc_amount": float(order_result.get('amount', 0)),
+                "timestamp": str(datetime.now()),
+                "order_id": order_result.get('id')
+            }
+
+            # Update state
+            self.active_positions.append(new_position)
+            self.save_state()  # Save immediately after state update
+
+            # Create and save alert
+            new_alert = {
+                "type": "buy_executed",
+                "price_level": level.price,
+                "entry_price": current_price,
+                "allocation": allocation_amount,
+                "btc_amount": new_position['btc_amount'],
+                "timestamp": new_position['timestamp'],
+                "order_id": order_result.get('id')
+            }
+            self.price_alerts.append(new_alert)
+
+            await self.notifications.send_notification(
+                title="BTC Buy Order Executed",
+                message=(
+                    f"Level: {level.price}\n"
+                    f"Amount: {new_position['btc_amount']:.8f} BTC\n"
+                    f"Cost: ${allocation_amount:.2f} AUD\n"
+                    f"Order ID: {order_result.get('id')}"
+                ),
+                priority=5
+            )
+
         except Exception as e:
             self.logger.error(f"Error in execute_buy_signal: {e}")
+            raise  # Re-raise to trigger trigger reset
 
     async def cleanup(self):
-        """Save state and cleanup resources before shutdown"""
+        """Cleanup resources before shutdown"""
         try:
+            self.logger.info("Starting cleanup...")
+            
+            # Save final state
             self.save_state()
-            await self.notifications.close()
-            await self.coinspot_api.close()
-            self.logger.info("Cleaned up resources and saved final state")
+            
+            # Close API sessions
+            if self.notifications:
+                await self.notifications.close()
+            
+            if self.coinspot_api:
+                await self.coinspot_api.close()
+                
+            self.logger.info("Cleanup completed successfully")
+            
         except Exception as e:
             self.logger.error(f"Error during cleanup: {e}")
+
+    async def cleanup_duplicate_positions(self):
+        """Clean up any duplicate positions"""
+        try:
+            # Group positions by price level
+            from collections import defaultdict
+            positions_by_level = defaultdict(list)
+            
+            for pos in self.active_positions:
+                positions_by_level[pos['price_level']].append(pos)
+            
+            # Keep only the earliest position for each level
+            cleaned_positions = []
+            for level, positions in positions_by_level.items():
+                if len(positions) > 1:
+                    self.logger.warning(f"Found {len(positions)} positions at level {level}")
+                    # Sort by timestamp and keep earliest
+                    positions.sort(key=lambda x: x['timestamp'])
+                    cleaned_positions.append(positions[0])
+                    
+                    # Log removed positions
+                    for removed in positions[1:]:
+                        self.logger.info(
+                            f"Removing duplicate position: Level {level}, "
+                            f"Entry: {removed['entry_price']}, "
+                            f"Time: {removed['timestamp']}"
+                        )
+                else:
+                    cleaned_positions.append(positions[0])
+            
+            # Update active positions
+            self.active_positions = cleaned_positions
+            self.save_state()
+            
+            return len(self.active_positions)
+        
+        except Exception as e:
+            self.logger.error(f"Error in cleanup_duplicate_positions: {e}")
+            return len(self.active_positions)
 
 # Configure FastAPI lifespan
 @asynccontextmanager
