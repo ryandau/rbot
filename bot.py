@@ -16,6 +16,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# Define the data directory
+DATA_DIR = 'data'
+
+# Ensure the data directory exists
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
 # Initialize logging
 logging.basicConfig(
     level=logging.INFO,
@@ -93,7 +100,7 @@ class MarketAnalysis:
         self.total_price_points = len(self.price_history)
         self.min_data_points = 5
         self.logger = logging.getLogger(__name__)
-        self.history_file = 'price_history.json'
+        self.history_file = os.path.join(DATA_DIR, 'price_history.json')
 
         # Configuration for trend analysis
         self.sma_short_period = 5
@@ -493,9 +500,9 @@ class BTCTrader:
         self.running = False
         self.last_btc_price = None
         
-        # File paths for persistence
-        self.state_file = 'trader_state.json'
-        self.history_file = 'price_history.json'
+        # Update file paths
+        self.state_file = os.path.join(DATA_DIR, 'trader_state.json')
+        self.history_file = os.path.join(DATA_DIR, 'price_history.json')
         
         # Setup logging first
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - [BTCTrader] %(message)s')
