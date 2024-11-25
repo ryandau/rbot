@@ -37,12 +37,12 @@ python bot.py
 
 ### Get Status
 ```bash
-curl http://localhost:8000/status
+curl http://127.0.0.1:8000/status
 ```
 
 ### Update Price Levels
 ```bash
-curl -X POST http://localhost:8000/update_levels \
+curl -X POST http://127.0.0.1:8000/update_levels \
 -H "Content-Type: application/json" \
 -d '{
   "70000.0": {
@@ -58,7 +58,7 @@ curl -X POST http://localhost:8000/update_levels \
 
 ### Update Settings
 ```bash
-curl -X POST http://localhost:8000/update_settings \
+curl -X POST http://127.0.0.1:8000/update_settings \
 -H "Content-Type: application/json" \
 -d '{
   "POLL_INTERVAL": 30,
@@ -73,12 +73,12 @@ curl -X POST http://localhost:8000/update_settings \
 
 ### Reset Triggers
 ```bash
-curl -X POST http://localhost:8000/reset_triggers
+curl -X POST http://127.0.0.1:8000/reset_triggers
 ```
 
 ### Health Check
 ```bash
-curl http://localhost:8000/health
+curl http://127.0.0.1:8000/health
 ```
 
 ## Features
