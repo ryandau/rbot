@@ -129,8 +129,8 @@ class MarketAnalysis:
 
         # Update if: first price, price changed, or enough time passed
         should_update = (
-            not self.price_history or 
-            price != self.last_price or 
+            not self.price_history or
+            price != self.last_price or
             (time_passed and time_passed >= settings.POLL_INTERVAL)
         )
 
@@ -142,21 +142,28 @@ class MarketAnalysis:
             self.last_update = current_time
             self.last_price = price
             self.total_price_points += 1
-            
+
             # Save after update
             self.save_history()
-            
+
+            # Format time_passed properly
+            if time_passed is not None:
+                time_passed_str = f"{time_passed:.1f}s"
+            else:
+                time_passed_str = "0s"
+
+            # Log the update
             self.logger.info(
                 f"Price history updated - New: {price}, "
                 f"Points: {len(self.price_history)}, "
-                f"Time passed: {time_passed:.1f if time_passed else 0}s, "
+                f"Time passed: {time_passed_str}, "
                 f"History: {self.price_history[:5]}"
             )
         else:
             self.logger.debug(
                 f"Update skipped - Current: {price}, "
                 f"Last: {self.last_price}, "
-                f"Time passed: {time_passed:.1f if time_passed else 0}s"
+                f"Time passed: {time_passed_str if time_passed else '0s'}"
             )
 
     def calculate_sma(self, period: int) -> Optional[float]:
@@ -716,21 +723,24 @@ class BTCTrader:
     async def get_btc_price(self) -> float:
         """Get current BTC price in AUD from Coinspot using bid/ask pricing"""
         try:
-            url = 'https://www.coinspot.com.au/pubapi/v2/latest'
+            # Correct the API URL
+            url = 'https://www.coinspot.com.au/pubapi/latest'
             headers = {'User-Agent': 'Mozilla/5.0'}
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
-                        
+                        self.logger.debug(f"API Response Data: {data}")
+
                         if data.get('status') == 'ok' and 'prices' in data:
                             btc_data = data['prices'].get('btc', {})
-                            
-                            # Get 'last' price first, fallback to bid/ask average
-                            if 'last' in btc_data:
+
+                            # Try to get 'last' price
+                            last_price_str = btc_data.get('last')
+                            if last_price_str:
                                 try:
-                                    price = float(btc_data['last'].replace(',', ''))
+                                    price = float(last_price_str.replace(',', ''))
                                     if price > 0:
                                         self.last_btc_price = price
                                         await self.market_analysis.update_history(price)
@@ -738,28 +748,32 @@ class BTCTrader:
                                         self.logger.info(f"BTC Price Update: ${price:.2f} AUD")
                                         return price
                                 except (ValueError, TypeError) as e:
-                                    self.logger.debug(f"Failed to parse 'last' price: {e}")
-                            
+                                    self.logger.error(f"Failed to parse 'last' price: {e}", exc_info=True)
+
                             # If 'last' fails, try bid/ask average
-                            try:
-                                bid = float(btc_data.get('bid', '0').replace(',', ''))
-                                ask = float(btc_data.get('ask', '0').replace(',', ''))
-                                if bid > 0 and ask > 0:
-                                    price = (bid + ask) / 2
-                                    self.last_btc_price = price
-                                    await self.market_analysis.update_history(price)
-                                    self.save_state()
-                                    self.logger.info(f"BTC Price Update: ${price:.2f} AUD (bid/ask avg)")
-                                    return price
-                            except (ValueError, TypeError) as e:
-                                self.logger.debug(f"Failed to parse bid/ask prices: {e}")
-                        
+                            bid_str = btc_data.get('bid', '0')
+                            ask_str = btc_data.get('ask', '0')
+                            if bid_str and ask_str:
+                                try:
+                                    bid = float(bid_str.replace(',', ''))
+                                    ask = float(ask_str.replace(',', ''))
+                                    if bid > 0 and ask > 0:
+                                        price = (bid + ask) / 2
+                                        self.last_btc_price = price
+                                        await self.market_analysis.update_history(price)
+                                        self.save_state()
+                                        self.logger.info(f"BTC Price Update: ${price:.2f} AUD (bid/ask avg)")
+                                        return price
+                                except (ValueError, TypeError) as e:
+                                    self.logger.error(f"Failed to parse bid/ask prices: {e}", exc_info=True)
+
                         if self.last_btc_price:
                             self.logger.warning(f"Using last known price: ${self.last_btc_price:.2f}")
                             return self.last_btc_price
-                            
+
                         self.logger.error("Invalid API response structure")
                         return 0
+
                     else:
                         self.logger.error(f"HTTP Error: Status {response.status}")
                         if self.last_btc_price:
@@ -767,7 +781,7 @@ class BTCTrader:
                         return 0
 
         except Exception as e:
-            self.logger.error(f"Request error: {str(e)}")
+            self.logger.error(f"Request error: {str(e)}", exc_info=True)
             if self.last_btc_price:
                 return self.last_btc_price
             return 0
