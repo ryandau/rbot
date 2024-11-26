@@ -615,6 +615,67 @@ class BTCTrader:
             self.logger.error(f"Error in check_total_exposure: {e}")
             return False
 
+    async def close_position(self, position: dict, current_price: float):
+        """Close a position when stop loss is triggered"""
+        try:
+            # Log the stop loss trigger
+            self.logger.warning(
+                f"Closing position due to stop loss: "
+                f"Entry: ${position['entry_price']:.2f}, "
+                f"Current: ${current_price:.2f}, "
+                f"Loss: {((current_price - position['entry_price']) / position['entry_price'] * 100):.2f}%"
+            )
+
+            # Place sell order
+            try:
+                data = {
+                    'cointype': 'BTC',
+                    'amount': str(position['btc_amount']),
+                    'amounttype': 'btc'  # Selling BTC amount
+                }
+                result = await self.coinspot_api.request('/my/sell/now', data)
+                if not result:
+                    self.logger.error("Failed to execute stop loss sell order")
+                    return  # Don't remove position if sell fails
+            except Exception as e:
+                self.logger.error(f"Error placing sell order: {e}")
+                return
+
+            # Remove from active positions
+            self.active_positions.remove(position)
+            
+            # Create alert for stop loss
+            stop_loss_alert = {
+                "type": "stop_loss_triggered",
+                "price_level": position['price_level'],
+                "entry_price": position['entry_price'],
+                "exit_price": current_price,
+                "btc_amount": position['btc_amount'],
+                "loss_percentage": ((current_price - position['entry_price']) / position['entry_price'] * 100),
+                "timestamp": str(datetime.now()),
+                "order_id": position['order_id']
+            }
+            self.price_alerts.append(stop_loss_alert)
+
+            # Save state after position closure
+            self.save_state()
+
+            # Send notification
+            await self.notifications.send_notification(
+                title="⚠️ Stop Loss Triggered",
+                message=(
+                    f"Position closed:\n"
+                    f"Entry: ${position['entry_price']:.2f}\n"
+                    f"Exit: ${current_price:.2f}\n"
+                    f"Loss: {((current_price - position['entry_price']) / position['entry_price'] * 100):.2f}%\n"
+                    f"Amount: {position['btc_amount']:.8f} BTC"
+                ),
+                priority=5
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error closing position: {e}")
+
     async def check_stop_losses(self, current_price: float):
         """Check and execute stop losses if needed"""
         try:
@@ -634,6 +695,11 @@ class BTCTrader:
     async def validate_new_position(self, level: PriceLevel, current_price: float) -> bool:
         """Validate all conditions before taking new position"""
         try:
+            # Add validation for negative/zero prices
+            if current_price <= 0:
+                self.logger.error(f"Invalid price: {current_price}")
+                return False
+
             # Add price sanity check first
             if current_price > level.price:
                 self.logger.warning(f"Invalid trigger attempt: Price {current_price} above level {level.price}")
@@ -681,24 +747,6 @@ class BTCTrader:
         if price_level not in self.position_locks:
             self.position_locks[price_level] = asyncio.Lock()
         return self.position_locks[price_level]
-
-    async def monitor_prices(self):
-        """Monitor BTC prices and check entry conditions"""
-        self.logger.info("Starting price monitoring...")
-
-        while self.running:
-            try:
-                current_price = await self.get_btc_price()
-                if current_price > 0:
-                    await self.check_price_levels(current_price)
-                await asyncio.sleep(settings.POLL_INTERVAL)
-                self.logger.info(
-                    f"Monitoring - Current Price: ${current_price:.2f}, "
-                    f"History Points: {len(self.market_analysis.price_history)}"
-                )
-            except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(settings.POLL_INTERVAL * 2)  # Back off on error
 
     async def check_price_levels(self, current_price: float):
         """Check price levels with proper locking"""
@@ -824,7 +872,8 @@ class BTCTrader:
                 'active_positions': self.active_positions,
                 'price_alerts': self.price_alerts,
                 'last_update': str(datetime.now()),
-                'total_price_points': self.market_analysis.total_price_points
+                'total_price_points': self.market_analysis.total_price_points,
+                'peak_portfolio_value': self.peak_portfolio_value  # Add this
             }
             
             with open(self.state_file, 'w') as f:
