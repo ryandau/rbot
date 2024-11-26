@@ -40,11 +40,18 @@ class Settings(BaseModel):
     COINSPOT_API_KEY: str = os.getenv('COINSPOT_API_KEY')
     COINSPOT_API_SECRET: str = os.getenv('COINSPOT_API_SECRET')
     
-    # New trading thresholds
+    # Trading thresholds
     MIN_VOLATILITY_THRESHOLD: float = float(os.getenv('MIN_VOLATILITY_THRESHOLD', 0.001))
     MAX_VOLATILITY_THRESHOLD: float = float(os.getenv('MAX_VOLATILITY_THRESHOLD', 0.03))
     CONFIDENCE_THRESHOLD: float = float(os.getenv('CONFIDENCE_THRESHOLD', 0.35))
     SIGNAL_AGREEMENT_REQUIRED: int = int(os.getenv('SIGNAL_AGREEMENT_REQUIRED', 2))
+
+    # Protection settings
+    MAX_DRAWDOWN_PCT: float = float(os.getenv('MAX_DRAWDOWN_PCT', 10.0))  # 10% maximum drawdown
+    MAX_DECLINE_RATE_PCT: float = float(os.getenv('MAX_DECLINE_RATE_PCT', 2.0))  # 2% per check
+    MAX_TOTAL_EXPOSURE: float = float(os.getenv('MAX_TOTAL_EXPOSURE', 2000.0))  # AUD
+    PRICE_VALIDATION_THRESHOLD: float = float(os.getenv('PRICE_VALIDATION_THRESHOLD', 1.0))  # % difference allowed
+    STOP_LOSS_PCT: float = float(os.getenv('STOP_LOSS_PCT', 5.0))  # 5% stop loss
 
 class NotificationManager:
     def __init__(self, ntfy_topic: str):
@@ -499,6 +506,8 @@ class BTCTrader:
         self.logger = logging.getLogger(__name__)
         self.running = False
         self.last_btc_price = None
+        self.peak_portfolio_value = 0.0
+        self.last_prices = []  # Store recent prices for decline rate
         
         # Update file paths
         self.state_file = os.path.join(DATA_DIR, 'trader_state.json')
@@ -539,6 +548,134 @@ class BTCTrader:
         # Initialize CoinspotAPI with credentials
         self.coinspot_api = CoinspotAPI(settings.COINSPOT_API_KEY, settings.COINSPOT_API_SECRET)
 
+    async def check_drawdown(self, current_price: float) -> bool:
+        """Check if current drawdown exceeds maximum allowed"""
+        try:
+            # Calculate total portfolio value
+            portfolio_value = sum(
+                pos["btc_amount"] * current_price 
+                for pos in self.active_positions
+            )
+            
+            # Update peak value
+            self.peak_portfolio_value = max(
+                self.peak_portfolio_value, 
+                portfolio_value
+            )
+            
+            if self.peak_portfolio_value > 0:
+                drawdown = (self.peak_portfolio_value - portfolio_value) / self.peak_portfolio_value * 100
+                if drawdown > settings.MAX_DRAWDOWN_PCT:
+                    self.logger.warning(
+                        f"Maximum drawdown exceeded: {drawdown:.2f}% > {settings.MAX_DRAWDOWN_PCT}%"
+                    )
+                    return False
+            return True
+        except Exception as e:
+            self.logger.error(f"Error in check_drawdown: {e}")
+            return False
+
+    async def check_decline_rate(self, current_price: float) -> bool:
+        """Check if price is declining too rapidly"""
+        try:
+            self.last_prices.insert(0, (datetime.now(), current_price))
+            self.last_prices = self.last_prices[:10]  # Keep last 10 prices
+            
+            if len(self.last_prices) >= 2:
+                time_diff = (self.last_prices[0][0] - self.last_prices[-1][0]).total_seconds()
+                price_diff = (self.last_prices[0][1] - self.last_prices[-1][1]) / self.last_prices[-1][1] * 100
+                
+                decline_rate = (price_diff / time_diff) * 300  # Normalize to 5-minute rate
+                
+                if decline_rate < -settings.MAX_DECLINE_RATE_PCT:
+                    self.logger.warning(
+                        f"Price declining too rapidly: {decline_rate:.2f}% per 5min"
+                    )
+                    return False
+            return True
+        except Exception as e:
+            self.logger.error(f"Error in check_decline_rate: {e}")
+            return False
+
+    async def check_total_exposure(self, new_position_size: float) -> bool:
+        """Check if new position would exceed maximum exposure"""
+        try:
+            current_exposure = sum(
+                float(pos.get('btc_amount', 0)) * self.last_btc_price 
+                for pos in self.active_positions
+            )
+            
+            if (current_exposure + new_position_size) > settings.MAX_TOTAL_EXPOSURE:
+                self.logger.warning(
+                    f"Maximum exposure exceeded: {current_exposure + new_position_size:.2f} > {settings.MAX_TOTAL_EXPOSURE}"
+                )
+                return False
+            return True
+        except Exception as e:
+            self.logger.error(f"Error in check_total_exposure: {e}")
+            return False
+
+    async def check_stop_losses(self, current_price: float):
+        """Check and execute stop losses if needed"""
+        try:
+            for position in self.active_positions[:]:  # Copy list to allow modification
+                entry_price = float(position['entry_price'])
+                loss_pct = (current_price - entry_price) / entry_price * 100
+                
+                if loss_pct < -settings.STOP_LOSS_PCT:
+                    self.logger.warning(
+                        f"Stop loss triggered for position entered at {entry_price}"
+                    )
+                    # Here you would add logic to sell the position
+                    await self.close_position(position, current_price)
+        except Exception as e:
+            self.logger.error(f"Error in check_stop_losses: {e}")
+
+    async def validate_new_position(self, level: PriceLevel, current_price: float) -> bool:
+        """Validate all conditions before taking new position"""
+        try:
+            # Add price sanity check first
+            if current_price > level.price:
+                self.logger.warning(f"Invalid trigger attempt: Price {current_price} above level {level.price}")
+                return False
+
+            # Existing entry condition check
+            if not await self.check_entry_conditions(level, current_price):
+                return False
+                
+            # New protection checks
+            checks = await asyncio.gather(
+                self.check_drawdown(current_price),
+                self.check_decline_rate(current_price),
+                self.check_total_exposure(settings.INITIAL_INVESTMENT * level.allocation)
+            )
+            
+            return all(checks)
+            
+        except Exception as e:
+            self.logger.error(f"Error in validate_new_position: {e}")
+            return False
+
+    async def monitor_prices(self):
+        """Updated monitor_prices with new protections"""
+        self.logger.info("Starting price monitoring...")
+
+        while self.running:
+            try:
+                current_price = await self.get_btc_price()
+                if current_price > 0:
+                    # Check stop losses before anything else
+                    await self.check_stop_losses(current_price)
+                    
+                    # Then check price levels for new positions
+                    await self.check_price_levels(current_price)
+                    
+                await asyncio.sleep(settings.POLL_INTERVAL)
+                
+            except Exception as e:
+                self.logger.error(f"Error in monitoring loop: {e}")
+                await asyncio.sleep(settings.POLL_INTERVAL * 2)
+
     async def get_level_lock(self, price_level: float) -> asyncio.Lock:
         """Get or create lock for price level"""
         if price_level not in self.position_locks:
@@ -572,13 +709,12 @@ class BTCTrader:
                 level.last_checked = current_time
                 buffer_price = level.price - self.price_buffer
 
+                # Add explicit price validation
+                if current_price > level.price:
+                    self.logger.info(f"Price {current_price} above level {level.price} - skipping")
+                    continue
+
                 if not level.triggered and current_price <= buffer_price:
-                    # Get lock for this level
-                    lock = await self.get_level_lock(level.price)
-                    
-                    async with lock:  # Ensure atomic operation
-                        # Recheck conditions after acquiring lock
-                        if not level.triggered and current_price <= buffer_price:
                             # Validate before executing
                             if await self.validate_new_position(level, current_price):
                                 allocation_amount = settings.INITIAL_INVESTMENT * level.allocation
