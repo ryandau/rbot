@@ -19,8 +19,7 @@ cd rbot
 pip install -r requirements.txt
 ```
 
-2. Create `.env` file with your CoinSpot API credentials and ntfy.sh topic:
-(Get API keys from https://www.coinspot.com.au/my/api)
+2. Create `.env` file with your [CoinSpot API credentials](https://www.coinspot.com.au/my/api) and [ntfy.sh](https://ntfy.sh/) topic.
 ```env
 # Price levels
 POLL_INTERVAL=30
