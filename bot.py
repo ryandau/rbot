@@ -55,6 +55,11 @@ class Settings(BaseModel):
     PRICE_VALIDATION_THRESHOLD: float = float(os.getenv('PRICE_VALIDATION_THRESHOLD', 1.0))
     STOP_LOSS_PCT: float = float(os.getenv('STOP_LOSS_PCT', 5.0))
 
+    # Technical analysis
+    SMA_SHORT_PERIOD: int = int(os.getenv('SMA_SHORT_PERIOD', 5))
+    SMA_LONG_PERIOD: int = int(os.getenv('SMA_LONG_PERIOD', 14)) 
+    EMA_ALPHA: float = float(os.getenv('EMA_ALPHA', 0.2))
+
 class NotificationManager:
     def __init__(self, ntfy_topic: str):
         self.ntfy_url = f"https://ntfy.sh/{ntfy_topic}"
