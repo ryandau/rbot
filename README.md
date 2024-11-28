@@ -124,4 +124,10 @@ curl http://127.0.0.1:8000/health
 
 ## Disclaimer
 
-This bot is provided for educational and research purposes only. Cryptocurrency trading carries significant risks, and you should never invest more than you can afford to lose. The creators of this bot are not responsible for any financial losses incurred through its use.
+This software is provided "as is" without warranty. The author(s) are not liable for any:
+- Trading losses or financial decisions
+- Technical malfunctions
+- Data inaccuracies
+- Direct or indirect damages
+
+This is not financial advice. Use at your own risk.
