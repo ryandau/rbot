@@ -31,27 +31,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class Settings(BaseModel):
-    POLL_INTERVAL: int = int(os.getenv('POLL_INTERVAL', 20))
+    POLL_INTERVAL: int = int(os.getenv('POLL_INTERVAL', 30))
     INITIAL_INVESTMENT: float = float(os.getenv('INITIAL_INVESTMENT', 500))  # AUD
-    RISK_THRESHOLD: float = float(os.getenv('RISK_THRESHOLD', 0.7))
+    RISK_THRESHOLD: float = float(os.getenv('RISK_THRESHOLD', 0.65))
     MAX_HISTORY_DAYS: int = int(os.getenv('MAX_HISTORY_DAYS', 14))
-    PRICE_BUFFER: float = float(os.getenv('PRICE_BUFFER', 500))  # AUD
+    PRICE_BUFFER: float = float(os.getenv('PRICE_BUFFER', 300))  # AUD
     NTFY_TOPIC: str = os.getenv('NTFY_TOPIC')
+
+    # API keys 
     COINSPOT_API_KEY: str = os.getenv('COINSPOT_API_KEY')
     COINSPOT_API_SECRET: str = os.getenv('COINSPOT_API_SECRET')
     
     # Trading thresholds
-    MIN_VOLATILITY_THRESHOLD: float = float(os.getenv('MIN_VOLATILITY_THRESHOLD', 0.001))
-    MAX_VOLATILITY_THRESHOLD: float = float(os.getenv('MAX_VOLATILITY_THRESHOLD', 0.03))
-    CONFIDENCE_THRESHOLD: float = float(os.getenv('CONFIDENCE_THRESHOLD', 0.35))
+    MIN_VOLATILITY_THRESHOLD: float = float(os.getenv('MIN_VOLATILITY_THRESHOLD', 0.0002))
+    MAX_VOLATILITY_THRESHOLD: float = float(os.getenv('MAX_VOLATILITY_THRESHOLD', 0.02))
+    CONFIDENCE_THRESHOLD: float = float(os.getenv('CONFIDENCE_THRESHOLD', 0.42))
     SIGNAL_AGREEMENT_REQUIRED: int = int(os.getenv('SIGNAL_AGREEMENT_REQUIRED', 2))
 
     # Protection settings
-    MAX_DRAWDOWN_PCT: float = float(os.getenv('MAX_DRAWDOWN_PCT', 10.0))  # 10% maximum drawdown
-    MAX_DECLINE_RATE_PCT: float = float(os.getenv('MAX_DECLINE_RATE_PCT', 2.0))  # 2% per check
-    MAX_TOTAL_EXPOSURE: float = float(os.getenv('MAX_TOTAL_EXPOSURE', 2000.0))  # AUD
-    PRICE_VALIDATION_THRESHOLD: float = float(os.getenv('PRICE_VALIDATION_THRESHOLD', 1.0))  # % difference allowed
-    STOP_LOSS_PCT: float = float(os.getenv('STOP_LOSS_PCT', 5.0))  # 5% stop loss
+    MAX_DRAWDOWN_PCT: float = float(os.getenv('MAX_DRAWDOWN_PCT', 10.0))
+    MAX_DECLINE_RATE_PCT: float = float(os.getenv('MAX_DECLINE_RATE_PCT', 2.5))
+    MAX_TOTAL_EXPOSURE: float = float(os.getenv('MAX_TOTAL_EXPOSURE', 750.0))  # AUD
+    PRICE_VALIDATION_THRESHOLD: float = float(os.getenv('PRICE_VALIDATION_THRESHOLD', 1.0))
+    STOP_LOSS_PCT: float = float(os.getenv('STOP_LOSS_PCT', 5.0))
 
 class NotificationManager:
     def __init__(self, ntfy_topic: str):
