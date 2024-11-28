@@ -101,12 +101,26 @@ curl http://127.0.0.1:8000/health
 
 ## Features
 
-- Real-time BTC/AUD price monitoring
-- Technical analysis with multiple indicators
-- Configurable price levels and entry points
-- Risk management system
-- Real-time notifications via ntfy.sh
-- State persistence
+* Real-time BTC/AUD price monitoring
+* Technical analysis with multiple indicators:
+  - SMA, EMA, momentum
+  - Linear regression analysis
+  - Volatility calculations
+* Configurable price levels and entry points
+* Risk management system:
+  - Maximum drawdown protection
+  - Decline rate monitoring
+  - Stop-loss automation
+  - Exposure limits
+* Real-time notifications via ntfy.sh
+* State persistence
+* API endpoints for:
+  - Status monitoring
+  - Settings updates
+  - Price level management
+  - Health checks
+* CoinSpot API integration
+* Automatic position tracking
 
 ## Disclaimer
 
