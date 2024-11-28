@@ -2,6 +2,14 @@
 
 Bitcoin trading bot for the Australian market using CoinSpot API.
 
+Licensed under [MIT License](LICENSE)
+
+## Requirements
+- Python 3.8+
+- FastAPI
+- aiohttp
+- pydantic
+
 ## Setup
 
 1. Clone and install:
@@ -11,7 +19,8 @@ cd rbot
 pip install -r requirements.txt
 ```
 
-2. Create `.env` file:
+2. Create `.env` file with your CoinSpot API credentials and ntfy.sh topic:
+(Get API keys from https://www.coinspot.com.au/my/api)
 ```env
 # Price levels
 POLL_INTERVAL=30
@@ -113,7 +122,6 @@ curl http://127.0.0.1:8000/health
   - Stop-loss automation
   - Exposure limits
 * Real-time notifications via ntfy.sh
-* State persistence
 * API endpoints for:
   - Status monitoring
   - Settings updates
@@ -121,6 +129,7 @@ curl http://127.0.0.1:8000/health
   - Health checks
 * CoinSpot API integration
 * Automatic position tracking
+* Bot state and price history stored in `data/`
 
 ## Disclaimer
 
