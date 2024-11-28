@@ -116,10 +116,10 @@ class MarketAnalysis:
         self.logger = logging.getLogger(__name__)
         self.history_file = os.path.join(DATA_DIR, 'price_history.json')
 
-        # Configuration for trend analysis
-        self.sma_short_period = 5
-        self.sma_long_period = 14
-        self.ema_alpha = 0.2
+        # Technical analysis config from settings
+        self.sma_short_period = settings.SMA_SHORT_PERIOD
+        self.sma_long_period = settings.SMA_LONG_PERIOD
+        self.ema_alpha = settings.EMA_ALPHA
 
     def load_history(self) -> List[float]:
         try:
