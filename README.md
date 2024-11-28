@@ -13,7 +13,7 @@ pip install -r requirements.txt
 
 2. Create `.env` file:
 ```env
-# Price levels - ensures proper allocation and entry points
+# Price levels
 POLL_INTERVAL=30
 INITIAL_INVESTMENT=500.0
 RISK_THRESHOLD=0.65
