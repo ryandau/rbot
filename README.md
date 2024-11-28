@@ -1,6 +1,6 @@
 # rbot
 
-Bitcoin trading bot for the Australian market using CoinSpot API.
+Bitcoin DCA (Dollar Cost Average) trading bot for the Australian market using CoinSpot API with technical analysis and risk management.
 
 Licensed under [MIT License](LICENSE)
 
