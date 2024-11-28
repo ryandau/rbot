@@ -140,7 +140,7 @@ class MarketAnalysis:
             self.logger.error(f"Error saving history: {e}")
 
     async def update_history(self, price: float):
-        """Update price history with new price point."""
+        """Update price history with validation"""
         if price <= 0:
             self.logger.error(f"Invalid price for history update: {price}")
             return
@@ -148,7 +148,12 @@ class MarketAnalysis:
         current_time = datetime.now()
         time_passed = (current_time - self.last_update).total_seconds() if self.last_update else None
 
-        # Update if: first price, price changed, or enough time passed
+        # Validate price movement
+        if self.price_history:
+            price_change = abs(price - self.price_history[0]) / self.price_history[0]
+            if price_change > settings.PRICE_VALIDATION_THRESHOLD:
+                self.logger.warning(f"Large price movement detected: {price_change:.2%}")
+
         should_update = (
             not self.price_history or
             price != self.last_price or
@@ -163,8 +168,6 @@ class MarketAnalysis:
             self.last_update = current_time
             self.last_price = price
             self.total_price_points += 1
-
-            # Save after update
             self.save_history()
 
             # Format time_passed properly
@@ -902,6 +905,12 @@ class BTCTrader:
             self.active_positions = state.get('active_positions', [])
             self.price_alerts = state.get('price_alerts', [])
             
+            # Initialize market analysis with loaded price history
+            self.market_analysis = MarketAnalysis(
+                settings.MAX_HISTORY_DAYS,
+                price_history=self.price_history
+            )
+            
             self.logger.info(
                 f"State loaded successfully: "
                 f"{len(self.price_history)} price points, "
@@ -1158,9 +1167,15 @@ async def update_levels(new_levels: Dict[float, PriceLevel]):
 
 @app.post("/update_settings")
 async def update_settings(new_settings: Settings):
-    """Update bot settings"""
-    global settings
+    """Update bot settings and reinitialize analysis"""
+    global settings, trader
     settings = new_settings
+    
+    # Update market analysis with new settings
+    trader.market_analysis.sma_short_period = settings.SMA_SHORT_PERIOD
+    trader.market_analysis.sma_long_period = settings.SMA_LONG_PERIOD 
+    trader.market_analysis.ema_alpha = settings.EMA_ALPHA
+    
     logger.info(f"Updated settings: {settings.dict()}")
     return {"status": "success", "new_settings": settings.dict()}
 
