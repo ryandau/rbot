@@ -99,7 +99,7 @@ curl -X POST http://127.0.0.1:8000/update_settings \
     "MAX_TOTAL_EXPOSURE": 750.0,
     "PRICE_VALIDATION_THRESHOLD": 1.0,
     "STOP_LOSS_PCT": 5.0,
-    "SMA_SHORT_PERIOD": 5,
+    "SMA_SHORT_PERIOD": 8,
     "SMA_LONG_PERIOD": 14,
     "EMA_ALPHA": 0.2
 }'
