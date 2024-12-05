@@ -38,10 +38,10 @@ class Settings(BaseModel):
     PRICE_BUFFER: float = float(os.getenv('PRICE_BUFFER', 300))  # AUD
     NTFY_TOPIC: str = os.getenv('NTFY_TOPIC')
 
-    # API keys 
+    # API keys
     COINSPOT_API_KEY: str = os.getenv('COINSPOT_API_KEY')
     COINSPOT_API_SECRET: str = os.getenv('COINSPOT_API_SECRET')
-    
+
     # Trading thresholds
     MIN_VOLATILITY_THRESHOLD: float = float(os.getenv('MIN_VOLATILITY_THRESHOLD', 0.0002))
     MAX_VOLATILITY_THRESHOLD: float = float(os.getenv('MAX_VOLATILITY_THRESHOLD', 0.02))
@@ -57,7 +57,7 @@ class Settings(BaseModel):
 
     # Technical analysis
     SMA_SHORT_PERIOD: int = int(os.getenv('SMA_SHORT_PERIOD', 5))
-    SMA_LONG_PERIOD: int = int(os.getenv('SMA_LONG_PERIOD', 14)) 
+    SMA_LONG_PERIOD: int = int(os.getenv('SMA_LONG_PERIOD', 14))
     EMA_ALPHA: float = float(os.getenv('EMA_ALPHA', 0.2))
 
 class NotificationManager:
@@ -128,7 +128,7 @@ class MarketAnalysis:
                 return data['price_history'][-self.max_history:]
         except:
             return []
-            
+
     def save_history(self):
         try:
             with open(self.history_file, 'w') as f:
@@ -147,6 +147,7 @@ class MarketAnalysis:
 
         current_time = datetime.now()
         time_passed = (current_time - self.last_update).total_seconds() if self.last_update else None
+        time_passed_str = f"{time_passed:.1f}s" if time_passed is not None else "0s"
 
         # Validate price movement
         if self.price_history:
@@ -170,12 +171,6 @@ class MarketAnalysis:
             self.total_price_points += 1
             self.save_history()
 
-            # Format time_passed properly
-            if time_passed is not None:
-                time_passed_str = f"{time_passed:.1f}s"
-            else:
-                time_passed_str = "0s"
-
             # Log the update
             self.logger.info(
                 f"Price history updated - New: {price}, "
@@ -187,20 +182,20 @@ class MarketAnalysis:
             self.logger.debug(
                 f"Update skipped - Current: {price}, "
                 f"Last: {self.last_price}, "
-                f"Time passed: {time_passed_str if time_passed else '0s'}"
+                f"Time passed: {time_passed_str}"
             )
 
     def calculate_sma(self, period: int) -> Optional[float]:
-        """Calculate Simple Moving Average with proper error handling"""
         try:
             if not self.price_history or len(self.price_history) < period:
-                self.logger.debug(f"Insufficient data for SMA({period}): {len(self.price_history)} points")
+                self.logger.debug(f"Price history state: {self.price_history}")
                 return None
-                
-            sma = sum(self.price_history[:period]) / period
-            self.logger.debug(f"Calculated SMA({period}): {sma:.2f}")
+
+            values = self.price_history[:period]
+            self.logger.debug(f"Calculating SMA with values: {values}")
+            sma = sum(values) / period
             return sma
-            
+
         except Exception as e:
             self.logger.error(f"Error calculating SMA({period}): {e}")
             return None
@@ -275,14 +270,14 @@ class MarketAnalysis:
                 (self.price_history[i] - self.price_history[i+1]) / self.price_history[i+1]
                 for i in range(len(self.price_history)-1)
             ]
-            
+
             # Calculate weighted standard deviation with more weight on recent changes
             weights = [1 - (i / len(changes)) for i in range(len(changes))]
             weighted_changes = [c * w for c, w in zip(changes, weights)]
-            
+
             mean = sum(weighted_changes) / sum(weights)
             variance = sum(w * ((c - mean) ** 2) for c, w in zip(changes, weights)) / sum(weights)
-            
+
             # Scale the volatility to match your thresholds
             volatility = abs(variance ** 0.5)  # Taking absolute value for safety
 
@@ -299,14 +294,14 @@ class MarketAnalysis:
             # Count agreeing signals
             signal_values = list(trend_signals.values())
             agreement = len([s for s in signal_values if s == signal_values[0] and s != 0])
-            
+
             # Normalize trend score to -1 to 1 range
             norm_score = max(min(trend_score, 1), -1)
-            
+
             # Factor in volatility
             vol_factor = min(volatility / settings.MIN_VOLATILITY_THRESHOLD, 1)
             adjusted_score = norm_score * vol_factor
-            
+
             # Determine trend based on adjusted score and agreement
             if abs(adjusted_score) < 0.1 or agreement < 2:
                 return "neutral"
@@ -326,7 +321,7 @@ class MarketAnalysis:
         """
         try:
             signal_values = list(trend_signals.values())
-            
+
             # Count agreeing signals based on trend direction
             if trend in ["upward", "strong_upward"]:
                 agreeing = sum(1 for s in signal_values if s == 1)
@@ -337,9 +332,9 @@ class MarketAnalysis:
                 from collections import Counter
                 signal_counts = Counter(signal_values)
                 agreeing = max(signal_counts.values())
-            
+
             meets_requirement = agreeing >= settings.SIGNAL_AGREEMENT_REQUIRED
-            
+
             return agreeing, meets_requirement
 
         except Exception as e:
@@ -358,7 +353,7 @@ class MarketAnalysis:
             ema_short = self.calculate_ema(self.sma_short_period)
             slope, r_squared = self.calculate_linear_regression()
             momentum = self.calculate_momentum()
-            
+
             # Calculate volatility with improved method
             volatility = self.calculate_volatility()
 
@@ -394,12 +389,12 @@ class MarketAnalysis:
             trend_strength = abs(trend_score)
             regression_quality = r_squared if r_squared is not None else 0
             vol_confidence = min(volatility / settings.MAX_VOLATILITY_THRESHOLD, 1)
-            
-            confidence = (signal_confidence * 0.3 + 
-                        trend_strength * 0.3 + 
+
+            confidence = (signal_confidence * 0.3 +
+                        trend_strength * 0.3 +
                         regression_quality * 0.2 +
                         vol_confidence * 0.2)
-            
+
             # Ensure confidence is between 0 and 1
             confidence = max(0, min(1, confidence))
 
@@ -463,21 +458,25 @@ class CoinspotAPI:
         self.logger = logging.getLogger(__name__)
         self.api_key = api_key
         self.api_secret = api_secret
-        self.api_endpoint = 'https://www.coinspot.com.au/api/v2'
+        self.api_endpoint = 'https://www.coinspot.com.au/api/v2'  # Base API endpoint
         self.session = aiohttp.ClientSession()
 
     async def close(self):
+        """Close the aiohttp session"""
         if self.session:
             await self.session.close()
+            self.session = None
 
-    async def request(self, path: str, data: dict) -> dict:
+    async def request(self, path: str, data: dict, read_only: bool = False) -> dict:
         """Make an authenticated request to the Coinspot API."""
         try:
-            nonce = int(datetime.now().timestamp() * 1000)
-            data['nonce'] = nonce
+            # Add nonce if not present
+            if 'nonce' not in data:
+                data['nonce'] = int(datetime.now().timestamp() * 1000)
+
             post_data = json.dumps(data, separators=(',', ':'))
 
-            # Create the HMAC signature
+            # Create HMAC signature
             sign = hmac.new(
                 self.api_secret.encode('utf-8'),
                 post_data.encode('utf-8'),
@@ -491,38 +490,49 @@ class CoinspotAPI:
                 'sign': sign
             }
 
-            url = f"{self.api_endpoint}{path}"
+            # Construct URL based on read_only flag
+            if read_only:
+                url = f"{self.api_endpoint}/ro{path}"
+            else:
+                url = f"{self.api_endpoint}{path}"
+
+            self.logger.info(f"Making request to {url}")
+            self.logger.info(f"Request data: {post_data}")
 
             async with self.session.post(url, data=post_data, headers=headers) as response:
                 response_text = await response.text()
                 self.logger.info(f"API Response: {response_text}")
+
                 if response.status == 200:
                     result = json.loads(response_text)
                     if result.get('status') == 'ok':
                         return result
                     else:
-                        self.logger.error(f"API Error: {result.get('message')}")
+                        self.logger.error(f"API Error: {result}")
                         return None
                 else:
                     self.logger.error(f"HTTP Error: Status {response.status}")
+                    self.logger.error(f"Response: {response_text}")
                     return None
+
         except Exception as e:
-            self.logger.error(f"Error in CoinspotAPI request: {e}")
+            self.logger.error(f"Error in CoinspotAPI request: {e}", exc_info=True)
             return None
 
 class BTCTrader:
     def __init__(self):
+        # Initialize basic attributes
         self.position_locks = {}
         self.logger = logging.getLogger(__name__)
         self.running = False
         self.last_btc_price = None
         self.peak_portfolio_value = 0.0
         self.last_prices = []  # Store recent prices for decline rate
-        
+
         # Update file paths
         self.state_file = os.path.join(DATA_DIR, 'trader_state.json')
         self.history_file = os.path.join(DATA_DIR, 'price_history.json')
-        
+
         # Setup logging first
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - [BTCTrader] %(message)s')
         file_handler = logging.FileHandler('btc_trader.log')
@@ -538,41 +548,278 @@ class BTCTrader:
 
         self.logger.setLevel(logging.INFO)
         self.logger.info("BTCTrader logger initialized")
-        
+
+        # Initialize with default values before loading state
+        self.price_history = []
+        self.active_positions = []
+        self.price_alerts = []
+
         # Load previous state
         self.load_state()
-        
+
         # Initialize components after loading state
         self.market_analysis = MarketAnalysis(
             settings.MAX_HISTORY_DAYS,
-            price_history=self.price_history if hasattr(self, 'price_history') else []
+            price_history=self.price_history
         )
         self.notifications = NotificationManager(settings.NTFY_TOPIC)
         self.price_buffer = settings.PRICE_BUFFER
-        
-        # Initialize with loaded state or defaults
-        self.price_alerts = getattr(self, 'price_alerts', [])
-        self.active_positions = getattr(self, 'active_positions', [])
-        self.last_btc_price = getattr(self, 'last_btc_price', None)
 
         # Initialize CoinspotAPI with credentials
         self.coinspot_api = CoinspotAPI(settings.COINSPOT_API_KEY, settings.COINSPOT_API_SECRET)
+
+    def load_state(self):
+        """Load previous trading state"""
+        try:
+            with open(self.state_file, 'r') as f:
+                state = json.load(f)
+
+            self.price_history = state.get('price_history', [])
+            # Initialize market analysis ONCE with proper history
+            if not hasattr(self, 'market_analysis'):
+                self.market_analysis = MarketAnalysis(
+                    settings.MAX_HISTORY_DAYS,
+                    price_history=self.price_history
+                )
+            else:
+                # Update existing market analysis
+                self.market_analysis.price_history = self.price_history
+
+            self.logger.info(
+                f"State loaded successfully: "
+                f"{len(self.price_history)} price points, "
+                f"{len(self.active_positions)} active positions"
+            )
+
+        except FileNotFoundError:
+            self.logger.info("No previous state found, starting fresh")
+            self.price_history = []
+            self.active_positions = []
+            self.price_alerts = []
+        except Exception as e:
+            self.logger.error(f"Error loading state: {e}")
+            self.price_history = []
+            self.active_positions = []
+            self.price_alerts = []
+
+    def save_state(self):
+        try:
+            state = {
+                'price_history': self.market_analysis.price_history,
+                'last_btc_price': self.last_btc_price,
+                'active_positions': self.active_positions,
+                'price_alerts': self.price_alerts,
+                'last_update': str(datetime.now()),
+                'total_price_points': self.market_analysis.total_price_points,
+                'peak_portfolio_value': self.peak_portfolio_value
+            }
+
+            # Write to temporary file first
+            temp_file = f"{self.state_file}.tmp"
+            with open(temp_file, 'w') as f:
+                json.dump(state, f)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Atomic rename
+            os.replace(temp_file, self.state_file)
+
+            self.logger.info(f"State saved: {len(self.market_analysis.price_history)} points")
+
+        except Exception as e:
+            self.logger.error(f"Error saving state: {e}")
+
+    async def validate_state_consistency(self):
+        """Validate state consistency"""
+        try:
+            # Check position-level matching
+            for position in self.active_positions:
+                if not any(
+                    abs(float(position['price_level']) - float(price)) < 0.0001
+                    for price in price_levels.keys()
+                ):
+                    self.logger.warning(
+                        f"Invalid position found for level {position['price_level']}"
+                    )
+                    return False
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error validating state consistency: {e}")
+            return False
+
+    async def sync_historical_positions(self):
+        """Sync positions with CoinSpot order history"""
+        try:
+            self.logger.info("Starting historical position sync...")
+
+            # First, ensure we have price levels
+            if not price_levels:
+                self.logger.error("No price levels configured")
+                return False
+
+            data = {
+                'cointype': 'BTC',
+                'limit': 500
+            }
+
+            history = await self.coinspot_api.request('/my/orders/completed', data, read_only=True)
+
+            if not history or 'buyorders' not in history:
+                self.logger.error("Failed to fetch order history")
+                return False
+
+            buy_orders = history.get('buyorders', [])
+            sell_orders = history.get('sellorders', [])
+
+            # Track sold positions by creating a set of sold amounts
+            sold_amounts = set()
+            for sell in sell_orders:
+                try:
+                    sold_amounts.add(float(sell['amount']))
+                except (ValueError, KeyError):
+                    continue
+
+            # Sort price levels for better matching
+            sorted_levels = sorted(price_levels.items(), key=lambda x: x[0], reverse=True)
+
+            # Process active positions
+            active_positions = []
+            positions_by_level = {}  # Track positions per level
+
+            for order in buy_orders:
+                try:
+                    entry_price = float(order['rate'])
+                    btc_amount = float(order['amount'])
+
+                    # Skip if amount has been sold
+                    if btc_amount in sold_amounts:
+                        self.logger.info(f"Skipping sold position: {btc_amount} BTC")
+                        continue
+
+                    # Find appropriate price level
+                    matched_level = None
+                    for level_price, level in sorted_levels:
+                        # Check if this position fits within this level's range
+                        next_level_up = None
+                        for higher_price, _ in sorted_levels:
+                            if higher_price > level_price:
+                                next_level_up = higher_price
+                                break
+
+                        # Calculate price range for this level
+                        upper_bound = next_level_up if next_level_up else float('inf')
+                        lower_bound = level_price
+
+                        if lower_bound <= entry_price < upper_bound:
+                            matched_level = level_price
+                            break
+
+                    if matched_level is not None:
+                        # Check allocation limits
+                        current_allocation = sum(
+                            pos['aud_total']
+                            for pos in positions_by_level.get(matched_level, [])
+                        )
+                        max_allocation = settings.INITIAL_INVESTMENT * price_levels[matched_level].allocation
+
+                        if current_allocation + float(order['audtotal']) <= max_allocation:
+                            position = {
+                                "price_level": matched_level,
+                                "entry_price": entry_price,
+                                "btc_amount": btc_amount,
+                                "timestamp": order['solddate'],
+                                "order_id": order.get('id'),
+                                "aud_total": float(order.get('audtotal', 0))
+                            }
+
+                            # Add to tracking structures
+                            if matched_level not in positions_by_level:
+                                positions_by_level[matched_level] = []
+                            positions_by_level[matched_level].append(position)
+                            active_positions.append(position)
+
+                            # Mark level as triggered
+                            price_levels[matched_level].triggered = True
+
+                            self.logger.info(
+                                f"Matched position: Level {matched_level}, "
+                                f"Entry: {entry_price}, Amount: {btc_amount} BTC"
+                            )
+                        else:
+                            self.logger.info(
+                                f"Skipping position due to allocation limit: "
+                                f"Level {matched_level}, Amount: {btc_amount} BTC"
+                            )
+                    else:
+                        self.logger.info(
+                            f"No matching level found for position: "
+                            f"Price {entry_price}, Amount: {btc_amount} BTC"
+                        )
+
+                except Exception as e:
+                    self.logger.error(f"Error processing order: {e}")
+                    continue
+
+            # Update state
+            self.active_positions = active_positions
+            self.save_state()
+
+            # Log summary
+            self.logger.info(
+                f"Sync completed: {len(active_positions)} positions matched "
+                f"across {len(positions_by_level)} price levels"
+            )
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error in sync_historical_positions: {e}")
+            return False
+
+    async def verify_position_triggers(self):
+        """Verify triggers match actual positions"""
+        try:
+            changes = 0
+            for price, level in price_levels.items():
+                has_position = any(
+                    pos['price_level'] == price
+                    for pos in self.active_positions
+                )
+
+                # Fix mismatched triggers
+                if level.triggered != has_position:
+                    level.triggered = has_position
+                    changes += 1
+                    self.logger.info(
+                        f"Fixed trigger state for level {price}: {has_position}"
+                    )
+
+            if changes:
+                self.logger.warning(f"Fixed {changes} mismatched triggers")
+
+            return changes
+
+        except Exception as e:
+            self.logger.error(f"Error verifying triggers: {e}")
+            return 0
 
     async def check_drawdown(self, current_price: float) -> bool:
         """Check if current drawdown exceeds maximum allowed"""
         try:
             # Calculate total portfolio value
             portfolio_value = sum(
-                pos["btc_amount"] * current_price 
+                pos["btc_amount"] * current_price
                 for pos in self.active_positions
             )
-            
+
             # Update peak value
             self.peak_portfolio_value = max(
-                self.peak_portfolio_value, 
+                self.peak_portfolio_value,
                 portfolio_value
             )
-            
+
             if self.peak_portfolio_value > 0:
                 drawdown = (self.peak_portfolio_value - portfolio_value) / self.peak_portfolio_value * 100
                 if drawdown > settings.MAX_DRAWDOWN_PCT:
@@ -590,13 +837,13 @@ class BTCTrader:
         try:
             self.last_prices.insert(0, (datetime.now(), current_price))
             self.last_prices = self.last_prices[:10]  # Keep last 10 prices
-            
+
             if len(self.last_prices) >= 2:
                 time_diff = (self.last_prices[0][0] - self.last_prices[-1][0]).total_seconds()
                 price_diff = (self.last_prices[0][1] - self.last_prices[-1][1]) / self.last_prices[-1][1] * 100
-                
+
                 decline_rate = (price_diff / time_diff) * 300  # Normalize to 5-minute rate
-                
+
                 if decline_rate < -settings.MAX_DECLINE_RATE_PCT:
                     self.logger.warning(
                         f"Price declining too rapidly: {decline_rate:.2f}% per 5min"
@@ -611,10 +858,10 @@ class BTCTrader:
         """Check if new position would exceed maximum exposure"""
         try:
             current_exposure = sum(
-                float(pos.get('btc_amount', 0)) * self.last_btc_price 
+                float(pos.get('btc_amount', 0)) * self.last_btc_price
                 for pos in self.active_positions
             )
-            
+
             if (current_exposure + new_position_size) > settings.MAX_TOTAL_EXPOSURE:
                 self.logger.warning(
                     f"Maximum exposure exceeded: {current_exposure + new_position_size:.2f} > {settings.MAX_TOTAL_EXPOSURE}"
@@ -653,7 +900,7 @@ class BTCTrader:
 
             # Remove from active positions
             self.active_positions.remove(position)
-            
+
             # Create alert for stop loss
             stop_loss_alert = {
                 "type": "stop_loss_triggered",
@@ -692,7 +939,7 @@ class BTCTrader:
             for position in self.active_positions[:]:  # Copy list to allow modification
                 entry_price = float(position['entry_price'])
                 loss_pct = (current_price - entry_price) / entry_price * 100
-                
+
                 if loss_pct < -settings.STOP_LOSS_PCT:
                     self.logger.warning(
                         f"Stop loss triggered for position entered at {entry_price}"
@@ -710,47 +957,52 @@ class BTCTrader:
                 self.logger.error(f"Invalid price: {current_price}")
                 return False
 
-            # Add price sanity check first
-            if current_price > level.price:
-                self.logger.warning(f"Invalid trigger attempt: Price {current_price} above level {level.price}")
+            # FIXED: Add explicit price validation
+            # Only allow buying when price is below the level price
+            if current_price >= level.price:  # Changed condition
+                self.logger.warning(f"Invalid trigger: Price ${current_price} at or above level ${level.price}")
                 return False
 
             # Existing entry condition check
             if not await self.check_entry_conditions(level, current_price):
                 return False
-                
+
             # New protection checks
             checks = await asyncio.gather(
                 self.check_drawdown(current_price),
                 self.check_decline_rate(current_price),
                 self.check_total_exposure(settings.INITIAL_INVESTMENT * level.allocation)
             )
-            
+
             return all(checks)
-            
+
         except Exception as e:
             self.logger.error(f"Error in validate_new_position: {e}")
             return False
 
     async def monitor_prices(self):
-        """Updated monitor_prices with new protections"""
+        """Monitor BTC prices and execute trading logic"""
         self.logger.info("Starting price monitoring...")
 
         while self.running:
             try:
                 current_price = await self.get_btc_price()
                 if current_price > 0:
-                    # Check stop losses before anything else
+                    # Check stop losses first
                     await self.check_stop_losses(current_price)
-                    
+
                     # Then check price levels for new positions
                     await self.check_price_levels(current_price)
-                    
+
+                    # Update market analysis
+                    await self.market_analysis.update_history(current_price)
+
+                # Wait for next interval
                 await asyncio.sleep(settings.POLL_INTERVAL)
-                
+
             except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(settings.POLL_INTERVAL * 2)
+                self.logger.error(f"Error in monitoring loop: {e}", exc_info=True)
+                await asyncio.sleep(settings.POLL_INTERVAL * 2)  # Wait longer on error
 
     async def get_level_lock(self, price_level: float) -> asyncio.Lock:
         """Get or create lock for price level"""
@@ -762,28 +1014,30 @@ class BTCTrader:
         """Check price levels with proper locking"""
         try:
             current_time = datetime.now()
-            
+
             for level in price_levels.values():
                 level.last_checked = current_time
                 buffer_price = level.price - self.price_buffer
 
-                # Add explicit price validation
-                if current_price > level.price:
+                # FIXED: Changed the price validation logic
+                # Only proceed if current price is BELOW the level price
+                if current_price >= level.price:  # Changed from current_price > level.price
                     self.logger.info(f"Price {current_price} above level {level.price} - skipping")
                     continue
 
+                # Only trigger if price has dropped to or below buffer price
                 if not level.triggered and current_price <= buffer_price:
-                            # Validate before executing
-                            if await self.validate_new_position(level, current_price):
-                                allocation_amount = settings.INITIAL_INVESTMENT * level.allocation
-                                # Set triggered BEFORE executing to prevent race
-                                level.triggered = True
-                                try:
-                                    await self.execute_buy_signal(level, current_price, allocation_amount)
-                                except Exception as e:
-                                    level.triggered = False  # Reset on failure
-                                    self.logger.error(f"Failed to execute buy signal: {e}")
-                            
+                    # Validate before executing
+                    if await self.validate_new_position(level, current_price):
+                        allocation_amount = settings.INITIAL_INVESTMENT * level.allocation
+                        # Set triggered BEFORE executing to prevent race
+                        level.triggered = True
+                        try:
+                            await self.execute_buy_signal(level, current_price, allocation_amount)
+                        except Exception as e:
+                            level.triggered = False  # Reset on failure
+                            self.logger.error(f"Failed to execute buy signal: {e}")
+
         except Exception as e:
             self.logger.error(f"Error in check_price_levels: {e}")
 
@@ -797,7 +1051,7 @@ class BTCTrader:
 
             # Get market conditions
             market_conditions = await self.market_analysis.analyze_market_conditions()
-            
+
             # Check price buffer condition first
             buffer_price = level.price - self.price_buffer
             if current_price > buffer_price:
@@ -822,10 +1076,10 @@ class BTCTrader:
             # Improved signal agreement check
             trend_signals = market_conditions['trend_signals']
             agreeing, meets_requirement = self.market_analysis.analyze_trend_signals(
-                trend_signals, 
+                trend_signals,
                 market_conditions['trend']
             )
-            
+
             if not meets_requirement:
                 self.logger.info(f"Insufficient signal agreement: {agreeing} signals agree")
                 return False
@@ -872,61 +1126,6 @@ class BTCTrader:
         except Exception as e:
             self.logger.error(f"Error in place_buy_order: {e}")
             return None
-
-    def save_state(self):
-        """Save complete trading state including price history"""
-        try:
-            state = {
-                'price_history': self.market_analysis.price_history,
-                'last_btc_price': self.last_btc_price,
-                'active_positions': self.active_positions,
-                'price_alerts': self.price_alerts,
-                'last_update': str(datetime.now()),
-                'total_price_points': self.market_analysis.total_price_points,
-                'peak_portfolio_value': self.peak_portfolio_value  # Add this
-            }
-            
-            with open(self.state_file, 'w') as f:
-                json.dump(state, f)
-                
-            self.logger.info(f"State saved successfully: {len(self.market_analysis.price_history)} price points")
-            
-        except Exception as e:
-            self.logger.error(f"Error saving state: {e}")
-
-    def load_state(self):
-        """Load previous trading state"""
-        try:
-            with open(self.state_file, 'r') as f:
-                state = json.load(f)
-                
-            self.price_history = state.get('price_history', [])
-            self.last_btc_price = state.get('last_btc_price')
-            self.active_positions = state.get('active_positions', [])
-            self.price_alerts = state.get('price_alerts', [])
-            
-            # Initialize market analysis with loaded price history
-            self.market_analysis = MarketAnalysis(
-                settings.MAX_HISTORY_DAYS,
-                price_history=self.price_history
-            )
-            
-            self.logger.info(
-                f"State loaded successfully: "
-                f"{len(self.price_history)} price points, "
-                f"{len(self.active_positions)} active positions"
-            )
-            
-        except FileNotFoundError:
-            self.logger.info("No previous state found, starting fresh")
-            self.price_history = []
-            self.active_positions = []
-            self.price_alerts = []
-        except Exception as e:
-            self.logger.error(f"Error loading state: {e}")
-            self.price_history = []
-            self.active_positions = []
-            self.price_alerts = []
 
     async def get_btc_price(self) -> float:
         """Get current BTC price in AUD from Coinspot using bid/ask pricing"""
@@ -1047,19 +1246,19 @@ class BTCTrader:
         """Cleanup resources before shutdown"""
         try:
             self.logger.info("Starting cleanup...")
-            
+
             # Save final state
             self.save_state()
-            
+
             # Close API sessions
             if self.notifications:
                 await self.notifications.close()
-            
+
             if self.coinspot_api:
                 await self.coinspot_api.close()
-                
+
             self.logger.info("Cleanup completed successfully")
-            
+
         except Exception as e:
             self.logger.error(f"Error during cleanup: {e}")
 
@@ -1069,10 +1268,10 @@ class BTCTrader:
             # Group positions by price level
             from collections import defaultdict
             positions_by_level = defaultdict(list)
-            
+
             for pos in self.active_positions:
                 positions_by_level[pos['price_level']].append(pos)
-            
+
             # Keep only the earliest position for each level
             cleaned_positions = []
             for level, positions in positions_by_level.items():
@@ -1081,7 +1280,7 @@ class BTCTrader:
                     # Sort by timestamp and keep earliest
                     positions.sort(key=lambda x: x['timestamp'])
                     cleaned_positions.append(positions[0])
-                    
+
                     # Log removed positions
                     for removed in positions[1:]:
                         self.logger.info(
@@ -1091,22 +1290,72 @@ class BTCTrader:
                         )
                 else:
                     cleaned_positions.append(positions[0])
-            
+
             # Update active positions
             self.active_positions = cleaned_positions
             self.save_state()
-            
+
             return len(self.active_positions)
-        
+
         except Exception as e:
             self.logger.error(f"Error in cleanup_duplicate_positions: {e}")
             return len(self.active_positions)
+
+    async def reconcile_state(self):
+        """Reconcile price levels and positions"""
+        try:
+            changed = False
+
+            # Check for triggered levels without positions
+            for price, level in price_levels.items():
+                if level.triggered:
+                    position_exists = any(
+                        pos['price_level'] == price
+                        for pos in self.active_positions
+                    )
+
+                    if not position_exists:
+                        self.logger.warning(
+                            f"Found triggered level {price} without position - resetting"
+                        )
+                        level.triggered = False
+                        changed = True
+
+            # Check for positions without triggered levels
+            for position in self.active_positions[:]:
+                level_exists = any(
+                    price == position['price_level']
+                    for price in price_levels.keys()
+                )
+
+                if not level_exists:
+                    self.logger.warning(
+                        f"Found position without price level - removing"
+                    )
+                    self.active_positions.remove(position)
+                    changed = True
+
+            if changed:
+                self.save_state()
+                await self.notifications.send_notification(
+                    title="State Reconciled",
+                    message="Fixed mismatched positions and triggers",
+                    priority=3
+                )
+
+            return changed
+
+        except Exception as e:
+            self.logger.error(f"Error in reconcile_state: {e}")
+            return False
 
 # Configure FastAPI lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global trader
     trader = BTCTrader()
+
+    # Just initialize with clean state
     trader.running = True
     monitoring_task = asyncio.create_task(trader.monitor_prices())
     logger.info("AUD Trading bot started")
@@ -1170,12 +1419,12 @@ async def update_settings(new_settings: Settings):
     """Update bot settings and reinitialize analysis"""
     global settings, trader
     settings = new_settings
-    
+
     # Update market analysis with new settings
     trader.market_analysis.sma_short_period = settings.SMA_SHORT_PERIOD
-    trader.market_analysis.sma_long_period = settings.SMA_LONG_PERIOD 
+    trader.market_analysis.sma_long_period = settings.SMA_LONG_PERIOD
     trader.market_analysis.ema_alpha = settings.EMA_ALPHA
-    
+
     logger.info(f"Updated settings: {settings.dict()}")
     return {"status": "success", "new_settings": settings.dict()}
 
@@ -1186,6 +1435,353 @@ async def reset_triggers():
         level.triggered = False
     logger.info("Reset all price triggers")
     return {"status": "success", "message": "All triggers reset"}
+
+@app.get("/sync_positions", response_model=dict)
+async def sync_positions():
+    """Sync positions with exchange history"""
+    try:
+        success = await trader.sync_historical_positions()
+        if success:
+            # Verify triggers after sync
+            fixed_triggers = await trader.verify_position_triggers()
+
+            return {
+                "status": "success",
+                "positions_recovered": len(trader.active_positions),
+                "triggers_fixed": fixed_triggers
+            }
+        else:
+            return {"status": "error", "message": "Failed to sync positions"}
+
+    except Exception as e:
+        logger.error(f"Error in position sync: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/verify_state", response_model=dict)
+async def verify_state():
+    """Verify and report on current trading state"""
+    try:
+        fixed_triggers = await trader.verify_position_triggers()
+
+        return {
+            "status": "success",
+            "active_positions": len(trader.active_positions),
+            "triggered_levels": sum(
+                1 for level in price_levels.values()
+                if level.triggered
+            ),
+            "triggers_fixed": fixed_triggers,
+            "state_valid": await trader.validate_state_consistency()
+        }
+
+    except Exception as e:
+        logger.error(f"Error in state verification: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/set_triggers", response_model=dict)
+async def set_triggers(trigger_data: Dict[str, bool]):
+    """Manually set triggered state for price levels"""
+    try:
+        updates = 0
+        for price_str, should_trigger in trigger_data.items():
+            price = float(price_str)
+            if price in price_levels:
+                price_levels[price].triggered = should_trigger
+                updates += 1
+
+        await trader.save_state()
+
+        return {
+            "status": "success",
+            "updates": updates,
+            "current_state": {
+                str(price): level.triggered
+                for price, level in price_levels.items()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error setting triggers: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/test_api")
+async def test_api():
+    """Test CoinSpot API connectivity"""
+    try:
+        # Test basic status
+        status_result = await trader.coinspot_api.request('/status', {
+            'nonce': int(datetime.now().timestamp() * 1000)
+        })
+
+        # Test read-only balances endpoint
+        balances_result = await trader.coinspot_api.request('/mybalances', {
+            'nonce': int(datetime.now().timestamp() * 1000)
+        }, read_only=True)
+
+        # Get detailed debug info
+        debug_info = {
+            "status_result": status_result,
+            "balances_result": balances_result,
+            "api_key_length": len(trader.coinspot_api.api_key) if trader.coinspot_api.api_key else 0,
+            "api_secret_set": bool(trader.coinspot_api.api_secret)
+        }
+
+        return {
+            "status": "success",
+            "api_connected": True,
+            "status_check": status_result,
+            "balances_check": balances_result is not None,
+            "debug_info": debug_info
+        }
+
+    except Exception as e:
+        logger.error(f"API test failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "debug_info": {
+                "error_type": type(e).__name__,
+                "error_details": str(e)
+            }
+        }
+
+@app.get("/check_balances")
+async def check_balances():
+    """Check account balances"""
+    try:
+        result = await trader.coinspot_api.request('/my/balances', {
+            'nonce': int(datetime.now().timestamp() * 1000)
+        }, read_only=True)
+
+        if result:
+            return {
+                "status": "success",
+                "balances": result.get('balances'),
+                "raw_response": result  # Include raw response for debugging
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to get balances",
+                "raw_response": None
+            }
+
+    except Exception as e:
+        logger.error(f"Balance check failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.get("/verify_credentials")
+async def verify_credentials():
+    """Verify API credentials are properly set"""
+    return {
+        "api_key_set": bool(settings.COINSPOT_API_KEY),
+        "api_secret_set": bool(settings.COINSPOT_API_SECRET),
+        "api_key_length": len(settings.COINSPOT_API_KEY) if settings.COINSPOT_API_KEY else 0,
+        "api_secret_length": len(settings.COINSPOT_API_SECRET) if settings.COINSPOT_API_SECRET else 0
+    }
+
+@app.get("/positions")
+async def get_positions():
+    """Get detailed position information"""
+    try:
+        # Get current BTC price
+        current_price = trader.last_btc_price if trader.last_btc_price else await trader.get_btc_price()
+
+        positions_info = []
+        total_btc = 0
+        total_aud_value = 0
+
+        for pos in trader.active_positions:
+            btc_amount = float(pos['btc_amount'])
+            entry_price = float(pos['entry_price'])
+            current_value = btc_amount * current_price
+            profit_loss = ((current_price - entry_price) / entry_price) * 100
+
+            position_detail = {
+                "price_level": pos['price_level'],
+                "entry_price": entry_price,
+                "current_price": current_price,
+                "btc_amount": btc_amount,
+                "aud_value": current_value,
+                "profit_loss_pct": profit_loss,
+                "timestamp": pos['timestamp'],
+                "order_id": pos['order_id']
+            }
+
+            positions_info.append(position_detail)
+            total_btc += btc_amount
+            total_aud_value += current_value
+
+        return {
+            "status": "success",
+            "current_btc_price": current_price,
+            "total_positions": len(positions_info),
+            "total_btc_amount": total_btc,
+            "total_aud_value": total_aud_value,
+            "positions": positions_info
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting positions: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.get("/debug_sync")
+async def debug_sync():
+    """Debug endpoint to check raw order history"""
+    try:
+        # Get raw order history
+        data = {
+            'cointype': 'BTC',
+            'limit': 500
+        }
+
+        history = await trader.coinspot_api.request('/my/orders/completed', data, read_only=True)
+
+        # Get current balances
+        balances = await trader.coinspot_api.request('/my/balances', {
+            'nonce': int(datetime.now().timestamp() * 1000)
+        }, read_only=True)
+
+        return {
+            "status": "success",
+            "raw_history": history,
+            "balances": balances,
+            "active_positions": trader.active_positions,
+            "price_levels": {
+                str(price): {
+                    "triggered": level.triggered,
+                    "allocation": level.allocation
+                }
+                for price, level in price_levels.items()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Debug sync error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/verify_sync")
+async def verify_sync():
+    """Verify sync status and current positions"""
+    try:
+        # Get current balances
+        balances = await trader.coinspot_api.request('/my/balances', {
+            'nonce': int(datetime.now().timestamp() * 1000)
+        }, read_only=True)
+
+        # Get BTC balance
+        btc_balance = 0
+        if balances and 'balances' in balances:
+            for balance in balances['balances']:
+                if balance.get('cointype') == 'BTC':
+                    btc_balance = float(balance.get('balance', 0))
+                    break
+
+        return {
+            "status": "success",
+            "btc_balance": btc_balance,
+            "active_positions": len(trader.active_positions),
+            "active_positions_detail": trader.active_positions,
+            "triggered_levels": sum(1 for level in price_levels.values() if level.triggered),
+            "price_levels": len(price_levels),
+            "last_sync": getattr(trader, 'last_sync', None)
+        }
+
+    except Exception as e:
+        logger.error(f"Verify sync error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/initialize_levels")
+async def initialize_levels():
+    """Initialize price levels based on recent trading history"""
+    try:
+        global price_levels
+
+        # Get current price
+        current_price = await trader.get_btc_price()
+        if not current_price:
+            return {"status": "error", "message": "Could not get current price"}
+
+        # Define price levels with 5% intervals down from current price
+        # Adjust these values based on your strategy
+        intervals = [
+            (0.95, 0.15),    # 5% down, 15% allocation
+            (0.90, 0.20),    # 10% down, 20% allocation
+            (0.85, 0.25),    # 15% down, 25% allocation
+            (0.80, 0.40)     # 20% down, 40% allocation
+        ]
+
+        new_levels = {}
+        for interval, allocation in intervals:
+            price = round(current_price * interval, 2)
+            new_levels[price] = PriceLevel(
+                price=price,
+                allocation=allocation,
+                triggered=False,
+                last_checked=datetime.now()
+            )
+
+        price_levels = new_levels
+
+        # After setting levels, try to sync positions
+        await trader.sync_historical_positions()
+
+        return {
+            "status": "success",
+            "current_price": current_price,
+            "price_levels": {
+                str(price): {
+                    "allocation": level.allocation,
+                    "triggered": level.triggered
+                }
+                for price, level in price_levels.items()
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error initializing levels: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/recover_position")
+async def recover_position(position_data: dict):
+    """Manually recover a position"""
+    try:
+        if not price_levels:
+            return {"status": "error", "message": "No price levels configured"}
+
+        entry_price = float(position_data['entry_price'])
+        btc_amount = float(position_data['btc_amount'])
+
+        # Find closest price level
+        closest_level = min(
+            price_levels.keys(),
+            key=lambda x: abs(float(x) - entry_price)
+        )
+
+        new_position = {
+            "price_level": closest_level,
+            "entry_price": entry_price,
+            "btc_amount": btc_amount,
+            "timestamp": position_data.get('timestamp', str(datetime.now())),
+            "order_id": position_data.get('order_id', f"manual_{int(time.time())}")
+        }
+
+        trader.active_positions.append(new_position)
+        price_levels[closest_level].triggered = True
+        trader.save_state()
+
+        return {
+            "status": "success",
+            "recovered_position": new_position
+        }
+
+    except Exception as e:
+        logger.error(f"Error recovering position: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/health")
 async def health_check():
