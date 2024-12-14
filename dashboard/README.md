@@ -1,64 +1,128 @@
-# React Dashboard
+# rbot Trading Dashboard
 
-![image](https://github.com/user-attachments/assets/cb2ae3f0-3309-41a9-a1f9-13021b32ca2a)
+A real-time React dashboard for monitoring the rbot Bitcoin trading bot.
 
-## Description
-This is a React dashboard for rbot served by an Express.js backend that provides static file serving and CORS support. The server is configured to serve a single-page application (SPA) by redirecting all routes to index.html.
+<img width="884" alt="image" src="https://github.com/user-attachments/assets/3ae94358-11d4-4c84-a157-0d3d16c75e45" />
+
+## Overview
+
+The dashboard provides:
+- Real-time price monitoring
+- Technical analysis visualization
+- Position tracking
+- Market conditions monitoring
+- Trading signals analysis
 
 ## Prerequisites
-- Node.js (version 14.0.0 or higher)
-- npm (Node Package Manager)
+
+- Node.js >= 14.0.0
+- npm
+- Access to rbot API (running on localhost:8000)
 
 ## Installation
 
-1. Install dependencies:
+1. Create and navigate to project directory:
+```bash
+mkdir -p ~/trading-dashboard
+cd ~/trading-dashboard
+```
+
+2. Clone or create required files:
+```bash
+# Create directories
+mkdir public
+
+# Create files
+touch server.js
+touch public/index.html
+touch public/app.js
+touch package.json
+```
+
+3. Copy the provided files:
+- `server.js` - Main server file
+- `public/index.html` - Dashboard HTML template
+- `public/app.js` - React application
+- `package.json` - Project configuration
+
+4. Install dependencies:
 ```bash
 npm install
 ```
 
-Required dependencies:
-- express
-- path
-- url
+## Running the Dashboard
 
-## Configuration
-
-The server is configured with:
-- Port: 3000 (configurable via PORT constant)
-- CORS: Enabled for all origins
-- Static file serving from 'public' directory
-- All routes redirect to index.html (SPA support)
-
-## Usage
-
-1. Start the server:
+1. Start the dashboard server:
 ```bash
-node server.js
+npm start
 ```
 
 2. Access the dashboard:
-- Local: http://127.0.0.1:3000
-- Network: http://your-ip-address:3000
+```
+http://localhost:3000
+```
 
-## Server Features
+## File Structure
+```
+trading-dashboard/
+├── server.js           # Express server configuration
+├── package.json        # Project dependencies
+├── node_modules/       # Installed packages
+└── public/            
+    ├── index.html     # Dashboard HTML template
+    └── app.js         # React application
+```
 
-### Static File Serving
-- Serves static files from the `public` directory
-- Configured using `express.static('public')`
+## Configuration
 
-### CORS Support
-- Allows cross-origin requests from any domain
-- Configures necessary CORS headers:
-  - Access-Control-Allow-Origin: *
-  - Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept
+### server.js
+- Port: 3000
+- CORS enabled for all origins
+- Serves static files from public directory
 
-### SPA Support
-- Redirects all routes to index.html
-- Enables client-side routing for React application
+### package.json
+```json
+{
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  }
+}
+```
 
 ## Development
 
-### Modifying the Server
-- Port can be changed by updating the `PORT` constant
-- CORS settings can be modified in the middleware
-- Static file directory can be changed in `express.static()`
+For development with auto-reload:
+```bash
+npm install --save-dev nodemon
+npm run dev
+```
+
+## API Integration
+
+The dashboard connects to the rbot API running on `http://127.0.0.1:8000` with endpoints:
+- `/status` - Current market conditions and positions
+- `/positions` - Active trading positions
+- Other endpoints as needed
+
+## Troubleshooting
+
+# Restart tunnels if needed
+```
+
+1. API Access
+```bash
+# Test API access
+curl http://127.0.0.1:8000/status
+```
+
+2. Common Issues:
+- "Cannot find module" - Run `npm install`
+- Connection refused - Check SSH tunnels
+- CORS errors - Verify server.js CORS settings
+- React loading issues - Check browser console
+
+## License
+
+MIT License - see LICENSE for details
