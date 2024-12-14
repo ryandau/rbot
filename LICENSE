@@ -22,42 +22,67 @@ SOFTWARE.
 
 ADDITIONAL TERMS AND DISCLAIMERS:
 
-1. FINANCIAL RISK DISCLAIMER
-This software is designed for cryptocurrency trading, which involves substantial 
-risk of loss and is not suitable for all users. Users are solely responsible 
-for determining whether to use the software and acknowledging all risks involved.
+1. JURISDICTIONAL STATEMENT
+This software was developed in Australia and primarily interfaces with Australian 
+cryptocurrency services. Users outside Australia must ensure compliance with their 
+local regulations. This software is governed by Australian law, specifically the 
+Corporations Act 2001 (Cth) and Australian Consumer Law where applicable.
 
-2. NO FINANCIAL ADVICE
-Nothing in this software constitutes financial advice, and users should consult 
-with qualified financial advisors before making any investment decisions.
+2. REGULATORY COMPLIANCE
+This software does not constitute a financial product or service under Australian 
+law and is not regulated by the Australian Securities and Investments Commission 
+(ASIC). Users must comply with all applicable Australian regulations, including 
+AML/CTF requirements and tax obligations.
 
-3. TECHNICAL RISK DISCLAIMER
+3. FINANCIAL RISK DISCLAIMER
+Cryptocurrency trading involves substantial risk of loss. Users acknowledge that:
+- Cryptocurrency markets are highly volatile
+- Past performance is not indicative of future results
+- Users may lose their entire investment
+- The software provides no guarantee of profit
+- Trading decisions should not be based solely on this software
+
+4. NO FINANCIAL ADVICE
+Nothing in this software constitutes financial advice under Australian law. Users 
+should consult with qualified financial advisors registered with ASIC before 
+making any investment decisions.
+
+5. TECHNICAL RISK DISCLAIMER
 The software may contain bugs, errors, or technical issues that could result 
 in financial loss. Users accept all risks associated with using the software 
 for automated trading.
 
-4. THIRD-PARTY SERVICE DEPENDENCY
+6. THIRD-PARTY SERVICE DEPENDENCY
 This software relies on third-party services (e.g., CoinSpot) and their APIs. 
 The author is not responsible for any issues, losses, or damages arising from 
 these dependencies.
 
-5. DATA ACCURACY
+7. DATA ACCURACY
 While efforts are made to ensure accuracy, the software makes no guarantees 
 about the accuracy of price data, market analysis, or trading signals.
 
-6. LIMITATION OF LIABILITY
-In no event shall the authors or copyright holders be liable for any direct, 
-indirect, incidental, special, exemplary, or consequential damages (including, 
-but not limited to, procurement of substitute goods or services; loss of use, 
-data, profits, or financial losses) arising from the use of this software.
+8. LIMITATION OF LIABILITY
+To the maximum extent permitted by Australian law, in no event shall the authors 
+or copyright holders be liable for any direct, indirect, incidental, special, 
+exemplary, or consequential damages (including, but not limited to, procurement 
+of substitute goods or services; loss of use, data, profits, or financial losses) 
+arising from the use of this software.
 
-7. USER RESPONSIBILITY
+9. CONSUMER GUARANTEES
+Where applicable under Australian Consumer Law, certain guarantees cannot be 
+excluded. Nothing in this license is intended to exclude, restrict or modify 
+any rights that cannot be excluded under applicable law.
+
+10. USER RESPONSIBILITY
 Users are responsible for:
-- Understanding their local regulations regarding cryptocurrency trading
+- Understanding Australian regulations regarding cryptocurrency trading
 - Securing their API keys and credentials
 - Monitoring the software's operation
 - Maintaining appropriate risk management practices
 - Verifying the software's actions and results
+- Complying with Australian tax obligations
+- Maintaining appropriate records for regulatory compliance
 
 By using this software, you acknowledge and agree to these additional terms 
-and disclaimers.
+and disclaimers. If any provision of this license is found to be unenforceable, 
+the remaining provisions shall remain in effect.
