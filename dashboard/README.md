@@ -53,16 +53,16 @@ npm install
 
 ## SSH Tunnel Setup
 
-To access the bot API running on localhost:8000, set up an SSH tunnel:
+To access the bot API running on 127.0.0.1:8000, set up an SSH tunnel:
 
 1. On your local machine:
 ```bash
-ssh -L 8000:localhost:8000 username@your-server
+ssh -L 8000:127.0.0.1:8000 username@your-server
 ```
 
 2. In a separate terminal, set up tunnel for dashboard:
 ```bash
-ssh -L 3000:localhost:3000 username@your-server
+ssh -L 3000:127.0.0.1:3000 username@your-server
 ```
 
 ## Running the Dashboard
@@ -74,7 +74,7 @@ npm start
 
 2. Access the dashboard:
 ```
-http://localhost:3000
+http://127.0.0.1:3000
 ```
 
 ## File Structure
