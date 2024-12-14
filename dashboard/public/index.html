@@ -3,40 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Dashboard</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <title>rbot Trading Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .card {
-            background: white;
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 1rem;
-        }
-        .alert {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .alert-destructive {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .alert-default {
-            background: #f3f4f6;
-            color: #1f2937;
-        }
-        .space-y-4 > * + * {
-            margin-top: 1rem;
-        }
-        .space-y-2 > * + * {
-            margin-top: 0.5rem;
-        }
-    </style>
 </head>
-<body class="bg-gray-100 p-4">
+<body class="bg-gray-100">
     <div id="root"></div>
     <script type="text/babel" src="app.js"></script>
 </body>
