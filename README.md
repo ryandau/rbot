@@ -1,14 +1,29 @@
 # rbot
 
-Bitcoin DCA (Dollar Cost Average) trading bot for the Australian market using CoinSpot API with technical analysis and risk management.
+Bitcoin DCA (Dollar Cost Average) trading bot for the Australian market using CoinSpot API. Features technical analysis, risk management, and automated trading strategies.
 
 Licensed under [MIT License](LICENSE)
 
+## Overview
+
+rbot implements an advanced trading strategy for Bitcoin purchases on CoinSpot, featuring:
+- Multi-level price entry points
+- Technical analysis validation
+- Risk management systems
+- Real-time monitoring
+- Push notifications
+
 ## Requirements
+
 - Python 3.8+
-- FastAPI
+- fastapi
 - aiohttp
 - pydantic
+- python-dotenv
+- uvicorn
+- hmac
+- typing
+- json
 
 ## Setup
 
@@ -19,124 +34,199 @@ cd rbot
 pip install -r requirements.txt
 ```
 
-2. Create `.env` file with your [CoinSpot API credentials](https://www.coinspot.com.au/my/api) and [ntfy.sh](https://ntfy.sh/) topic.
-```env
-# Price levels
-POLL_INTERVAL=30
-INITIAL_INVESTMENT=500.0
-RISK_THRESHOLD=0.65
-MAX_HISTORY_DAYS=14
-PRICE_BUFFER=300.0
-NTFY_TOPIC=your_ntfy_topic
+2. Set up credentials:
+- Get your [CoinSpot API credentials](https://www.coinspot.com.au/my/api)
+- Create a [ntfy.sh](https://ntfy.sh/) topic for notifications
+- Copy `.env.example` to `.env` and update with your credentials
 
-# API keys 
-COINSPOT_API_KEY=your_api_key
-COINSPOT_API_SECRET=your_api_secret
-
-# Trading thresholds
-MIN_VOLATILITY_THRESHOLD=0.0002
-MAX_VOLATILITY_THRESHOLD=0.02 
-CONFIDENCE_THRESHOLD=0.42
-SIGNAL_AGREEMENT_REQUIRED=2
-
-# Protection settings
-MAX_DRAWDOWN_PCT=10.0
-MAX_DECLINE_RATE_PCT=2.5 
-MAX_TOTAL_EXPOSURE=750.0
-PRICE_VALIDATION_THRESHOLD=1.0
-STOP_LOSS_PCT=5.0
-
- # Technical analysis
-SMA_SHORT_PERIOD=8
-SMA_LONG_PERIOD=14
-EMA_ALPHA=0.2
+3. Create data directory:
+```bash
+mkdir -p data
 ```
 
-## Run
-
+4. Run:
 ```bash
 python bot.py
 ```
 
+## Market Analysis
+
+The bot employs multiple technical indicators and analysis methods:
+
+- Moving Averages
+  - Short-term SMA (8 periods)
+  - Long-term SMA (21 periods)
+  - EMA with configurable alpha
+- Momentum Analysis
+  - Price momentum calculation
+  - Trend strength evaluation
+- Statistical Analysis
+  - Linear regression
+  - R-squared validation
+  - Volatility measurement
+- Signal Agreement
+  - Multiple signal validation
+  - Confidence scoring
+  - Risk level assessment
+
+## Risk Management
+
+Comprehensive risk management features:
+
+1. Position Protection
+   - Maximum drawdown limits
+   - Stop-loss automation
+   - Rapid decline protection
+   - Exposure limits
+
+2. Entry Validation
+   - Price buffers
+   - Volatility thresholds
+   - Technical confirmation
+   - Signal agreement requirements
+
+3. Portfolio Management
+   - Position sizing
+   - Allocation controls
+   - Total exposure limits
+   - Investment pacing
+
 ## API Endpoints
 
-### Get Status
+### Core Operations
+
+#### Status Check
 ```bash
-curl http://127.0.0.1:8000/status
+GET http://127.0.0.1:8000/status
+```
+Returns current market conditions, positions, and bot status.
+
+#### Health Check
+```bash
+GET http://127.0.0.1:8000/health
+```
+Confirms bot is running.
+
+### Position Management
+
+#### Get Positions
+```bash
+GET http://127.0.0.1:8000/positions
+```
+Returns detailed position information including P/L.
+
+#### Sync Positions
+```bash
+GET http://127.0.0.1:8000/sync_positions
+```
+Synchronizes positions with exchange history.
+
+#### Recover Position
+```bash
+POST http://127.0.0.1:8000/recover_position
+```
+Manually recover a position into tracking.
+
+### Configuration
+
+#### Update Price Levels
+```bash
+POST http://127.0.0.1:8000/update_levels
+Content-Type: application/json
+
+{
+    "165000.0": {"price": 165000.0, "allocation": 0.15, "triggered": false},
+    "160000.0": {"price": 160000.0, "allocation": 0.15, "triggered": false},
+    "155000.0": {"price": 155000.0, "allocation": 0.15, "triggered": false}
+}
 ```
 
-### Update Price Levels
+#### Update Settings
 ```bash
-curl -X POST http://127.0.0.1:8000/update_levels \
--H "Content-Type: application/json" \
--d '{
-    "147500.0": {"price": 147500.0, "allocation": 0.10, "triggered": true},
-    "145000.0": {"price": 145000.0, "allocation": 0.15, "triggered": true},
-    "142500.0": {"price": 142500.0, "allocation": 0.15, "triggered": true},
-    "141500.0": {"price": 141500.0, "allocation": 0.15},
-    "140000.0": {"price": 140000.0, "allocation": 0.15},
-    "137500.0": {"price": 137500.0, "allocation": 0.15},
-    "135000.0": {"price": 135000.0, "allocation": 0.15}
-}'
-```
+POST http://127.0.0.1:8000/update_settings
+Content-Type: application/json
 
-### Update Settings
-```bash
-curl -X POST http://127.0.0.1:8000/update_settings \
--H "Content-Type: application/json" \
--d '{
-    "POLL_INTERVAL": 30,
+{
+    "POLL_INTERVAL": 20,
     "INITIAL_INVESTMENT": 500.0,
-    "RISK_THRESHOLD": 0.65,
-    "MAX_HISTORY_DAYS": 14,
-    "PRICE_BUFFER": 300.0,
-    "MIN_VOLATILITY_THRESHOLD": 0.0002,
-    "MAX_VOLATILITY_THRESHOLD": 0.02,
-    "CONFIDENCE_THRESHOLD": 0.42,
-    "SIGNAL_AGREEMENT_REQUIRED": 2,
-    "MAX_DRAWDOWN_PCT": 10.0,
-    "MAX_DECLINE_RATE_PCT": 2.5,
-    "MAX_TOTAL_EXPOSURE": 750.0,
-    "PRICE_VALIDATION_THRESHOLD": 1.0,
-    "STOP_LOSS_PCT": 5.0,
-    "SMA_SHORT_PERIOD": 8,
-    "SMA_LONG_PERIOD": 14,
-    "EMA_ALPHA": 0.2
-}'
+    "RISK_THRESHOLD": 0.65
+    // ... other settings
+}
 ```
 
-### Reset Triggers
+#### Reset Triggers
 ```bash
-curl -X POST http://127.0.0.1:8000/reset_triggers
+POST http://127.0.0.1:8000/reset_triggers
 ```
+Resets all price level triggers.
 
-### Health Check
+### Monitoring
+
+#### Check Balances
 ```bash
-curl http://127.0.0.1:8000/health
+GET http://127.0.0.1:8000/check_balances
 ```
+Returns current account balances.
 
-## Features
+#### Verify Credentials
+```bash
+GET http://127.0.0.1:8000/verify_credentials
+```
+Validates API credentials.
 
-* Real-time BTC/AUD price monitoring
-* Technical analysis with multiple indicators:
-  - SMA, EMA, momentum
-  - Linear regression analysis
-  - Volatility calculations
-* Configurable price levels and entry points
-* Risk management system:
-  - Maximum drawdown protection
-  - Decline rate monitoring
-  - Stop-loss automation
-  - Exposure limits
-* Real-time notifications via ntfy.sh
-* API endpoints for:
-  - Status monitoring
-  - Settings updates
-  - Price level management
-  - Health checks
-* CoinSpot API integration
-* Automatic position tracking
-* Bot state and price history stored in `data/`
+#### Verify State
+```bash
+GET http://127.0.0.1:8000/verify_state
+```
+Checks bot state consistency.
+
+#### Debug Sync
+```bash
+GET http://127.0.0.1:8000/debug_sync
+```
+Detailed synchronization information.
+
+## Configuration
+
+The bot can be configured through:
+
+1. Environment Variables
+   - Set in `.env` file
+   - System environment variables
+   - Runtime updates via API
+
+2. Price Levels
+   - Multiple entry points
+   - Individual allocations
+   - Buffer zones
+   - Trigger status
+
+3. Trading Parameters
+   - Investment amounts
+   - Risk thresholds
+   - Technical indicators
+   - Protection settings
+
+## Data Storage
+
+The bot maintains state in the `data/` directory:
+- `trader_state.json`: Current bot state
+- `price_history.json`: Historical price data
+
+## Notifications
+
+Real-time notifications via ntfy.sh for:
+- Trade executions
+- Stop losses
+- Error conditions
+- State changes
+
+## Security Notes
+
+- API keys stored locally
+- No external data transmission except to CoinSpot
+- Secure notifications via ntfy.sh
+- No sensitive data logging
 
 ## Disclaimer
 
@@ -147,3 +237,7 @@ This software is provided "as is" without warranty. The author(s) are not liable
 - Direct or indirect damages
 
 This is not financial advice. Use at your own risk.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details
