@@ -116,12 +116,8 @@ class MarketAnalysis:
         self.logger = logging.getLogger(__name__)
         self.history_file = os.path.join(DATA_DIR, 'price_history.json')
 
-        # Technical analysis config from settings
-        self.sma_short_period = settings.SMA_SHORT_PERIOD
-        self.sma_long_period = settings.SMA_LONG_PERIOD
-        self.ema_alpha = settings.EMA_ALPHA
-
     def load_history(self) -> List[float]:
+        """Load previous price history"""
         try:
             with open(self.history_file, 'r') as f:
                 data = json.load(f)
@@ -130,6 +126,7 @@ class MarketAnalysis:
             return []
 
     def save_history(self):
+        """Save current price history"""
         try:
             with open(self.history_file, 'w') as f:
                 json.dump({
@@ -146,19 +143,13 @@ class MarketAnalysis:
             return
 
         current_time = datetime.now()
-        time_passed = (current_time - self.last_update).total_seconds() if self.last_update else None
-        time_passed_str = f"{time_passed:.1f}s" if time_passed is not None else "0s"
-
-        # Validate price movement
-        if self.price_history:
-            price_change = abs(price - self.price_history[0]) / self.price_history[0]
-            if price_change > settings.PRICE_VALIDATION_THRESHOLD:
-                self.logger.warning(f"Large price movement detected: {price_change:.2%}")
-
+        
+        # Only update if enough time has passed or price changed significantly
         should_update = (
             not self.price_history or
-            price != self.last_price or
-            (time_passed and time_passed >= settings.POLL_INTERVAL)
+            not self.last_update or
+            (current_time - self.last_update).total_seconds() >= settings.POLL_INTERVAL or
+            abs(price - self.last_price if self.last_price else 0) / (self.last_price if self.last_price else price) > 0.0001
         )
 
         if should_update:
@@ -171,29 +162,21 @@ class MarketAnalysis:
             self.total_price_points += 1
             self.save_history()
 
-            # Log the update
             self.logger.info(
                 f"Price history updated - New: {price}, "
                 f"Points: {len(self.price_history)}, "
-                f"Time passed: {time_passed_str}, "
                 f"History: {self.price_history[:5]}"
-            )
-        else:
-            self.logger.debug(
-                f"Update skipped - Current: {price}, "
-                f"Last: {self.last_price}, "
-                f"Time passed: {time_passed_str}"
             )
 
     def calculate_sma(self, period: int) -> Optional[float]:
+        """Calculate Simple Moving Average with proper validation"""
         try:
             if not self.price_history or len(self.price_history) < period:
-                self.logger.debug(f"Price history state: {self.price_history}")
+                self.logger.debug(f"Insufficient price history for SMA({period}). Have {len(self.price_history)} points")
                 return None
 
-            values = self.price_history[:period]
-            self.logger.debug(f"Calculating SMA with values: {values}")
-            sma = sum(values) / period
+            sma = sum(self.price_history[:period]) / period
+            self.logger.debug(f"Calculated SMA({period}): {sma} from {self.price_history[:period]}")
             return sma
 
         except Exception as e:
@@ -210,7 +193,7 @@ class MarketAnalysis:
             ema = sum(self.price_history[:period]) / period
 
             # Calculate EMA iteratively for remaining prices
-            alpha = self.ema_alpha  # Smoothing factor
+            alpha = settings.EMA_ALPHA  # Smoothing factor
             for price in self.price_history[:period-1]:
                 ema = price * alpha + ema * (1 - alpha)
 
@@ -242,12 +225,10 @@ class MarketAnalysis:
             x_mean = sum(x) / n
             y_mean = sum(y) / n
 
-            # Calculate slope
             numerator = sum((x[i] - x_mean) * (y[i] - y_mean) for i in range(n))
             denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
             slope = numerator / denominator if denominator != 0 else 0
 
-            # Calculate R-squared
             y_pred = [slope * (x[i] - x_mean) + y_mean for i in range(n)]
             ss_tot = sum((y[i] - y_mean) ** 2 for i in range(n))
             ss_res = sum((y[i] - y_pred[i]) ** 2 for i in range(n))
@@ -260,29 +241,29 @@ class MarketAnalysis:
             return None, None
 
     def calculate_volatility(self) -> float:
-        """Calculate volatility using rolling standard deviation of returns with proper scaling"""
+        """Calculate volatility with improved method"""
         try:
             if len(self.price_history) < 2:
                 return 0.0
 
             # Calculate percentage changes
-            changes = [
-                (self.price_history[i] - self.price_history[i+1]) / self.price_history[i+1]
-                for i in range(len(self.price_history)-1)
-            ]
+            changes = []
+            for i in range(len(self.price_history) - 1):
+                if self.price_history[i+1] != 0:  # Avoid division by zero
+                    change = (self.price_history[i] - self.price_history[i+1]) / self.price_history[i+1]
+                    changes.append(change)
 
-            # Calculate weighted standard deviation with more weight on recent changes
+            if not changes:
+                return 0.0
+
+            # Calculate weighted standard deviation
             weights = [1 - (i / len(changes)) for i in range(len(changes))]
-            weighted_changes = [c * w for c, w in zip(changes, weights)]
+            weighted_mean = sum(c * w for c, w in zip(changes, weights)) / sum(weights)
+            
+            variance = sum(w * ((c - weighted_mean) ** 2) 
+                         for c, w in zip(changes, weights)) / sum(weights)
 
-            mean = sum(weighted_changes) / sum(weights)
-            variance = sum(w * ((c - mean) ** 2) for c, w in zip(changes, weights)) / sum(weights)
-
-            # Scale the volatility to match your thresholds
-            volatility = abs(variance ** 0.5)  # Taking absolute value for safety
-
-            self.logger.debug(f"Calculated volatility: {volatility:.6f} from {len(changes)} changes")
-            return volatility
+            return (variance ** 0.5)
 
         except Exception as e:
             self.logger.error(f"Error calculating volatility: {e}")
@@ -314,117 +295,62 @@ class MarketAnalysis:
             self.logger.error(f"Error determining trend: {e}")
             return "neutral"
 
-    def analyze_trend_signals(self, trend_signals: dict, trend: str) -> tuple[int, bool]:
-        """
-        Analyze trend signals more comprehensively.
-        Returns (number of agreeing signals, whether they meet the requirement)
-        """
+    def _calculate_sma_signal(self, sma_short: Optional[float], sma_long: Optional[float]) -> int:
+        """Calculate SMA signal with proper validation"""
+        if sma_short is None or sma_long is None:
+            return 0
+        return 1 if sma_short > sma_long else -1 if sma_short < sma_long else 0
+
+    def _calculate_momentum_signal(self, momentum: Optional[float]) -> int:
+        """Calculate momentum signal with threshold"""
+        if momentum is None or abs(momentum) < 0.001:  # Add minimum threshold
+            return 0
+        return 1 if momentum > 0 else -1
+
+    def _calculate_regression_signal(self, slope: Optional[float]) -> int:
+        """Calculate regression signal with threshold"""
+        if slope is None or abs(slope) < 0.001:  # Add minimum threshold
+            return 0
+        return 1 if slope > 0 else -1
+
+    def _calculate_confidence(self, signals: dict, volatility: float, r_squared: Optional[float]) -> float:
+        """Calculate confidence score with improved method"""
+        if not signals or volatility == 0 or r_squared is None:
+            return 0.0
+
+        # Calculate signal agreement
+        unique_signals = set(signals.values())
+        if len(unique_signals) == 1 and 0 not in unique_signals:
+            signal_confidence = 1.0
+        else:
+            signal_confidence = 0.5
+
+        # Combine factors
+        confidence = (
+            signal_confidence * 0.4 +
+            min(volatility / settings.MAX_VOLATILITY_THRESHOLD, 1.0) * 0.3 +
+            r_squared * 0.3
+        )
+
+        return min(max(confidence, 0.0), 1.0)
+
+    def _calculate_risk_level(self, volatility: float, trend_signals: dict) -> float:
+        """Calculate risk level based on multiple factors"""
         try:
-            signal_values = list(trend_signals.values())
+            # Base risk on volatility
+            vol_risk = min(volatility / settings.MAX_VOLATILITY_THRESHOLD, 1.0)
+            
+            # Signal disagreement risk
+            unique_signals = len(set(trend_signals.values()))
+            signal_risk = unique_signals / 3  # Normalize to 0-1
 
-            # Count agreeing signals based on trend direction
-            if trend in ["upward", "strong_upward"]:
-                agreeing = sum(1 for s in signal_values if s == 1)
-            elif trend in ["downward", "strong_downward"]:
-                agreeing = sum(1 for s in signal_values if s == -1)
-            else:  # neutral
-                # For neutral trend, count most common signal
-                from collections import Counter
-                signal_counts = Counter(signal_values)
-                agreeing = max(signal_counts.values())
-
-            meets_requirement = agreeing >= settings.SIGNAL_AGREEMENT_REQUIRED
-
-            return agreeing, meets_requirement
+            # Combine risks
+            risk_level = (vol_risk + signal_risk) / 2
+            return min(max(risk_level, 0.0), 1.0)
 
         except Exception as e:
-            self.logger.error(f"Error analyzing trend signals: {e}")
-            return 0, False
-
-    async def analyze_market_conditions(self) -> dict:
-        """Analyze current market conditions with improved calculations"""
-        if len(self.price_history) < self.min_data_points:
-            return self._get_default_conditions()
-
-        try:
-            # Calculate indicators
-            sma_short = self.calculate_sma(self.sma_short_period)
-            sma_long = self.calculate_sma(self.sma_long_period)
-            ema_short = self.calculate_ema(self.sma_short_period)
-            slope, r_squared = self.calculate_linear_regression()
-            momentum = self.calculate_momentum()
-
-            # Calculate volatility with improved method
-            volatility = self.calculate_volatility()
-
-            # Determine trend signals
-            trend_signals = {
-                'sma_signal': (
-                    1 if (sma_short is not None and sma_long is not None and sma_short > sma_long)
-                    else -1 if (sma_short is not None and sma_long is not None and sma_short < sma_long)
-                    else 0
-                ),
-                'momentum_signal': (
-                    1 if (momentum is not None and momentum > 0)
-                    else -1 if (momentum is not None and momentum < 0)
-                    else 0
-                ),
-                'regression_signal': (
-                    1 if (slope is not None and slope > 0)
-                    else -1 if (slope is not None and slope < 0)
-                    else 0
-                )
-            }
-
-            # Calculate weighted trend score
-            weights = {'sma_signal': 0.35, 'momentum_signal': 0.35, 'regression_signal': 0.30}
-            trend_score = sum(signal * weights[name] for name, signal in trend_signals.items())
-
-            # Determine trend with improved classification
-            trend = self.determine_trend(trend_signals, trend_score, volatility)
-
-            # Calculate confidence with more factors
-            signal_agreement = len(set(trend_signals.values()))
-            signal_confidence = (3 - signal_agreement) / 3
-            trend_strength = abs(trend_score)
-            regression_quality = r_squared if r_squared is not None else 0
-            vol_confidence = min(volatility / settings.MAX_VOLATILITY_THRESHOLD, 1)
-
-            confidence = (signal_confidence * 0.3 +
-                        trend_strength * 0.3 +
-                        regression_quality * 0.2 +
-                        vol_confidence * 0.2)
-
-            # Ensure confidence is between 0 and 1
-            confidence = max(0, min(1, confidence))
-
-            return {
-                'trend': trend,
-                'confidence': confidence,
-                'volatility': volatility,
-                'risk_level': sum({
-                    'volatility': min(1, volatility * 10),
-                    'trend_reversal': 0.5 if getattr(self, '_previous_trend', trend) != trend else 0,
-                    'signal_disagreement': signal_agreement / 3,
-                }.values()) / 3,
-                'indicators': {
-                    'sma_short': sma_short,
-                    'sma_long': sma_long,
-                    'ema_short': ema_short,
-                    'momentum': momentum,
-                    'regression_slope': slope,
-                    'r_squared': r_squared
-                },
-                'trend_signals': trend_signals,
-                'trend_change': trend != getattr(self, '_previous_trend', trend),
-                'waiting_for_data': False,
-                'price_points': self.total_price_points,
-                'timestamp': datetime.now()
-            }
-
-        except Exception as e:
-            self.logger.error(f"Error in market analysis: {e}", exc_info=True)
-            return self._get_default_conditions()
+            self.logger.error(f"Error calculating risk level: {e}")
+            return 0.5  # Return moderate risk on error
 
     def _get_default_conditions(self) -> dict:
         """Return default market conditions when analysis cannot be performed"""
@@ -451,6 +377,54 @@ class MarketAnalysis:
             'price_points': self.total_price_points,
             'timestamp': datetime.now()
         }
+
+    async def analyze_market_conditions(self) -> dict:
+        """Analyze market conditions with improved calculations"""
+        if len(self.price_history) < self.min_data_points:
+            return self._get_default_conditions()
+
+        try:
+            # Calculate indicators
+            sma_short = self.calculate_sma(settings.SMA_SHORT_PERIOD)
+            sma_long = self.calculate_sma(settings.SMA_LONG_PERIOD)
+            ema_short = self.calculate_ema(settings.SMA_SHORT_PERIOD)
+            slope, r_squared = self.calculate_linear_regression()
+            momentum = self.calculate_momentum()
+            volatility = self.calculate_volatility()
+
+            # Calculate trend signals with validation
+            trend_signals = {
+                'sma_signal': self._calculate_sma_signal(sma_short, sma_long),
+                'momentum_signal': self._calculate_momentum_signal(momentum),
+                'regression_signal': self._calculate_regression_signal(slope)
+            }
+
+            # Calculate confidence with more factors
+            confidence = self._calculate_confidence(trend_signals, volatility, r_squared)
+
+            return {
+                'trend': self.determine_trend(trend_signals, confidence, volatility),
+                'confidence': confidence,
+                'volatility': volatility,
+                'risk_level': self._calculate_risk_level(volatility, trend_signals),
+                'indicators': {
+                    'sma_short': sma_short,
+                    'sma_long': sma_long,
+                    'ema_short': ema_short,
+                    'momentum': momentum,
+                    'regression_slope': slope,
+                    'r_squared': r_squared
+                },
+                'trend_signals': trend_signals,
+                'trend_change': False,  # Will be set by comparison with previous
+                'waiting_for_data': False,
+                'price_points': self.total_price_points,
+                'timestamp': datetime.now()
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error in market analysis: {e}")
+            return self._get_default_conditions()
 
 class CoinspotAPI:
     """Handles authenticated requests to Coinspot API."""
@@ -1503,47 +1477,6 @@ async def set_triggers(trigger_data: Dict[str, bool]):
         logger.error(f"Error setting triggers: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.get("/test_api")
-async def test_api():
-    """Test CoinSpot API connectivity"""
-    try:
-        # Test basic status
-        status_result = await trader.coinspot_api.request('/status', {
-            'nonce': int(datetime.now().timestamp() * 1000)
-        })
-
-        # Test read-only balances endpoint
-        balances_result = await trader.coinspot_api.request('/mybalances', {
-            'nonce': int(datetime.now().timestamp() * 1000)
-        }, read_only=True)
-
-        # Get detailed debug info
-        debug_info = {
-            "status_result": status_result,
-            "balances_result": balances_result,
-            "api_key_length": len(trader.coinspot_api.api_key) if trader.coinspot_api.api_key else 0,
-            "api_secret_set": bool(trader.coinspot_api.api_secret)
-        }
-
-        return {
-            "status": "success",
-            "api_connected": True,
-            "status_check": status_result,
-            "balances_check": balances_result is not None,
-            "debug_info": debug_info
-        }
-
-    except Exception as e:
-        logger.error(f"API test failed: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "debug_info": {
-                "error_type": type(e).__name__,
-                "error_details": str(e)
-            }
-        }
-
 @app.get("/check_balances")
 async def check_balances():
     """Check account balances"""
@@ -1693,57 +1626,6 @@ async def verify_sync():
 
     except Exception as e:
         logger.error(f"Verify sync error: {e}")
-        return {"status": "error", "message": str(e)}
-
-@app.post("/initialize_levels")
-async def initialize_levels():
-    """Initialize price levels based on recent trading history"""
-    try:
-        global price_levels
-
-        # Get current price
-        current_price = await trader.get_btc_price()
-        if not current_price:
-            return {"status": "error", "message": "Could not get current price"}
-
-        # Define price levels with 5% intervals down from current price
-        # Adjust these values based on your strategy
-        intervals = [
-            (0.95, 0.15),    # 5% down, 15% allocation
-            (0.90, 0.20),    # 10% down, 20% allocation
-            (0.85, 0.25),    # 15% down, 25% allocation
-            (0.80, 0.40)     # 20% down, 40% allocation
-        ]
-
-        new_levels = {}
-        for interval, allocation in intervals:
-            price = round(current_price * interval, 2)
-            new_levels[price] = PriceLevel(
-                price=price,
-                allocation=allocation,
-                triggered=False,
-                last_checked=datetime.now()
-            )
-
-        price_levels = new_levels
-
-        # After setting levels, try to sync positions
-        await trader.sync_historical_positions()
-
-        return {
-            "status": "success",
-            "current_price": current_price,
-            "price_levels": {
-                str(price): {
-                    "allocation": level.allocation,
-                    "triggered": level.triggered
-                }
-                for price, level in price_levels.items()
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"Error initializing levels: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/recover_position")
