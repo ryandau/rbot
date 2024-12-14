@@ -17,7 +17,7 @@ The dashboard provides:
 
 - Node.js >= 14.0.0
 - npm
-- Access to rbot API (running on localhost:8000)
+- Access to rbot API (running on 127.0.0.1:8000)
 - SSH access for tunneling
 
 ## Installation
