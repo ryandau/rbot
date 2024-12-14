@@ -19,3 +19,45 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+ADDITIONAL TERMS AND DISCLAIMERS:
+
+1. FINANCIAL RISK DISCLAIMER
+This software is designed for cryptocurrency trading, which involves substantial 
+risk of loss and is not suitable for all users. Users are solely responsible 
+for determining whether to use the software and acknowledging all risks involved.
+
+2. NO FINANCIAL ADVICE
+Nothing in this software constitutes financial advice, and users should consult 
+with qualified financial advisors before making any investment decisions.
+
+3. TECHNICAL RISK DISCLAIMER
+The software may contain bugs, errors, or technical issues that could result 
+in financial loss. Users accept all risks associated with using the software 
+for automated trading.
+
+4. THIRD-PARTY SERVICE DEPENDENCY
+This software relies on third-party services (e.g., CoinSpot) and their APIs. 
+The author is not responsible for any issues, losses, or damages arising from 
+these dependencies.
+
+5. DATA ACCURACY
+While efforts are made to ensure accuracy, the software makes no guarantees 
+about the accuracy of price data, market analysis, or trading signals.
+
+6. LIMITATION OF LIABILITY
+In no event shall the authors or copyright holders be liable for any direct, 
+indirect, incidental, special, exemplary, or consequential damages (including, 
+but not limited to, procurement of substitute goods or services; loss of use, 
+data, profits, or financial losses) arising from the use of this software.
+
+7. USER RESPONSIBILITY
+Users are responsible for:
+- Understanding their local regulations regarding cryptocurrency trading
+- Securing their API keys and credentials
+- Monitoring the software's operation
+- Maintaining appropriate risk management practices
+- Verifying the software's actions and results
+
+By using this software, you acknowledge and agree to these additional terms 
+and disclaimers.
