@@ -123,16 +123,22 @@ The dashboard connects to the rbot API running on `http://127.0.0.1:8000` with e
 
 ## Troubleshooting
 
+1. Connection Issues
+```bash
+# Check SSH tunnels
+lsof -i :8000
+lsof -i :3000
+
 # Restart tunnels if needed
 ```
 
-1. API Access
+2. API Access
 ```bash
 # Test API access
 curl http://127.0.0.1:8000/status
 ```
 
-2. Common Issues:
+3. Common Issues:
 - "Cannot find module" - Run `npm install`
 - Connection refused - Check SSH tunnels
 - CORS errors - Verify server.js CORS settings
