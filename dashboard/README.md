@@ -18,6 +18,7 @@ The dashboard provides:
 - Node.js >= 14.0.0
 - npm
 - Access to rbot API (running on localhost:8000)
+- SSH access for tunneling
 
 ## Installation
 
@@ -48,6 +49,20 @@ touch package.json
 4. Install dependencies:
 ```bash
 npm install
+```
+
+## SSH Tunnel Setup
+
+To access the bot API running on localhost:8000, set up an SSH tunnel:
+
+1. On your local machine:
+```bash
+ssh -L 8000:localhost:8000 username@your-server
+```
+
+2. In a separate terminal, set up tunnel for dashboard:
+```bash
+ssh -L 3000:localhost:3000 username@your-server
 ```
 
 ## Running the Dashboard
